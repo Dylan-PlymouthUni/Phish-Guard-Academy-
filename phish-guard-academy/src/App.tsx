@@ -1,62 +1,158 @@
 // @ts-nocheck
-import React, { useRef, useState, useEffect } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import "./App.css";
 import {
-  Search, ShieldAlert, Upload, Award, BookOpen, BarChart2, Info, CheckCircle2,
-  AlertTriangle, PlayCircle, Image as ImageIcon, FileText, Link as LinkIcon, Timer, Lock
+  ShieldAlert, Upload, Link as LinkIcon, Image as ImageIcon, CheckCircle2,
+  AlertTriangle, Info, PlayCircle, Award, BookOpen, BarChart2, Search, Timer, Lock
 } from "lucide-react";
 import {
   PieChart, Pie, ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip as ReTooltip, Legend
 } from "recharts";
+import { AnimatePresence, motion } from "framer-motion";
 
 /* ---------- Types ---------- */
-type Tab = "analysis" | "challenges" | "learn" | "analytics" | "glossary";
+type TabKey = "analysis" | "challenges" | "learn" | "analytics" | "glossary";
 
-/* ---------- Storage helpers ---------- */
-const LS_KEYS = { progress: "pg_progress_v1", events: "pg_events_v1" };
-const load = (k, def) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v ?? def; } catch { return def; } };
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
-const pushEvent = (evt) => { if (typeof window === "undefined") return; const ev = load(LS_KEYS.events, []); ev.push({ ts: Date.now(), ...evt }); save(LS_KEYS.events, ev); };
+type Finding = {
+  type: string;
+  label: string;
+  detail: string;
+  severity: "low" | "med" | "high";
+};
 
-/* ---------- Mock + helpers ---------- */
-async function mockAnalyze({ text, url, file }) {
-  const base = `${text || ""}\n${url || ""}\n${file ? file.name : ""}`.trim();
-  const hasUrl = /(https?:\/\/[^\s]+)/i.test(base);
-  const urgent = /(urgent|immediately|24\s*hours|verify now|account (locked|closed))/i.test(base);
-  const lookalike = /(paypaI|rnicrosoft|faceb00k|app1e|goog1e)/i.test(base);
-  const findings = [];
-  if (lookalike) findings.push({ type: "lookalike", label: "Lookalike brand", detail: "Possible homoglyphs in brand/domain", severity: "high" });
-  if (hasUrl) findings.push({ type: "links", label: "Contains links", detail: "Verify destination vs domain owner", severity: urgent ? "high" : "med" });
-  if (urgent) findings.push({ type: "urgent-language", label: "Urgent language", detail: "Pressure to act quickly detected", severity: "med" });
-  if (!findings.length) findings.push({ type: "general", label: "No strong cues", detail: "No obvious phishing signals in provided input", severity: "low" });
-  const riskBase = (urgent ? 40 : 10) + (hasUrl ? 20 : 0) + (lookalike ? 30 : 0);
-  const risk = Math.max(5, Math.min(98, riskBase));
-  return new Promise((r) => setTimeout(() => r({ risk, findings, boxes: [] }), 150));
+type Box = { x: number; y: number; w: number; h: number; label: string };
+
+type AnalysisResult = {
+  risk: number;
+  findings: Finding[];
+  boxes: Box[];
+};
+
+type QuizItem = {
+  id: string;
+  cat: string;
+  prompt: string;
+  options: string[];
+  correct: number;
+  explain: string;
+  img?: string;
+};
+
+type GlossaryItem = {
+  term: string;
+  aliases?: string[];
+  def: string;
+  examples?: { good: string; bad: string };
+};
+
+type EventRecord =
+  | { ts: number; type: "view_lesson"; topicId: string }
+  | { ts: number; type: "start_quiz"; topicId: string }
+  | { ts: number; type: "submit_quiz"; topicId: string; correct: boolean }
+  | { ts: number; type: "submit_quiz_question"; qId: string; choice: number; correct: boolean };
+
+/* ---------- Lightweight UI primitives (typed) ---------- */
+type Children = { children?: React.ReactNode };
+
+export function Button(
+  { children, className = "", ...rest }:
+  React.ButtonHTMLAttributes<HTMLButtonElement> & Children
+) {
+  return (
+    <button {...rest} className={`btn ${className}`.trim()}>{children}</button>
+  );
 }
 
-async function analyzeAPI(payload) {
-  try {
-    const r = await fetch("/api/analyze", {
-      method: "POST",
-      headers: payload.file ? undefined : { "Content-Type": "application/json" },
-      body: payload.file
-        ? (() => { const fd = new FormData(); if (payload.text) fd.append("text", payload.text); if (payload.url) fd.append("url", payload.url); fd.append("image", payload.file); return fd; })()
-        : JSON.stringify({ text: payload.text, url: payload.url })
-    });
-    if (!r.ok) throw new Error("fallback");
-    return await r.json();
-  } catch { return mockAnalyze(payload); }
+export function Input(
+  props: React.InputHTMLAttributes<HTMLInputElement>
+) {
+  return <input {...props} className={`input ${props.className || ""}`.trim()} />;
+}
+
+export function Textarea(
+  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>
+) {
+  return <textarea {...props} className={`textarea ${props.className || ""}`.trim()} />;
+}
+
+export function Switch({
+  checked, onChange, id, ...rest
+}: { checked: boolean; onChange: (v: boolean) => void; id?: string } & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className="switch" {...rest}>
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="slider" />
+    </div>
+  );
+}
+
+export function Label(
+  { htmlFor, children, className = "" }:
+  React.LabelHTMLAttributes<HTMLLabelElement> & Children
+) {
+  return <label htmlFor={htmlFor} className={`label ${className}`.trim()}>{children}</label>;
+}
+
+export function Badge({ children, variant = "default" }: { children: React.ReactNode; variant?: "default" | "secondary" | "destructive" }) {
+  return <span className={`badge badge-${variant}`}>{children}</span>;
+}
+
+export function Progress({ value }: { value: number }) {
+  return (
+    <div className="progress">
+      <div style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+    </div>
+  );
+}
+
+export function Card({ children, className = "" }: Children & { className?: string }) {
+  return <div className={`card ${className}`.trim()}>{children}</div>;
+}
+
+export function CardHeader({ children, className = "" }: Children & { className?: string }) {
+  return <div className={`card-header ${className}`.trim()}>{children}</div>;
+}
+
+export function CardContent({ children, className = "" }: Children & { className?: string }) {
+  return <div className={`card-content ${className}`.trim()}>{children}</div>;
+}
+
+export function CardFooter({ children, className = "" }: Children & { className?: string }) {
+  return <div className={`card-footer ${className}`.trim()}>{children}</div>;
+}
+
+export function CardTitle({ children, className = "" }: Children & { className?: string }) {
+  return <div className={`card-title ${className}`.trim()}>{children}</div>;
+}
+
+export function Alert(
+  { children, variant = "default" }: Children & { variant?: "default" | "destructive" }
+) {
+  return <div className={`alert ${variant === "destructive" ? "alert-danger" : ""}`}>{children}</div>;
+}
+export function AlertTitle({ children }: Children) { return <div className="alert-title">{children}</div>; }
+export function AlertDescription({ children }: Children) { return <div className="alert-desc">{children}</div>; }
+
+/* ---------- Storage helpers ---------- */
+const LS_KEYS = {
+  progress: "pg_progress_v1",
+  events: "pg_events_v1",
+};
+function load<T>(k: string, def: T): T {
+  try { const v = JSON.parse(localStorage.getItem(k) || "null"); return (v ?? def) as T; } catch { return def; }
+}
+function save<T>(k: string, v: T) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function pushEvent(evt: Omit<EventRecord, "ts">) {
+  if (typeof window === "undefined") return;
+  const ev = load<EventRecord[]>(LS_KEYS.events, []);
+  ev.push({ ts: Date.now(), ...evt } as EventRecord);
+  save(LS_KEYS.events, ev);
 }
 
 /* ---------- Demo data ---------- */
@@ -69,7 +165,7 @@ const demoTrend = [
   { month: "Sep", credentialHarvesting: 44, invoiceFraud: 21, extortion: 11 },
 ];
 
-const demoQuiz = [
+const demoQuiz: QuizItem[] = [
   { id: "q1", cat:"Email", prompt: "Email: 'Account will be terminated in 24 hours.' Link text bank.example.com → URL bank.safe-login.co", options: ["Legit","Suspicious: urgency + mismatch","Safe because HTTPS","Ignore"], correct: 1, explain: "Urgency + link text vs destination mismatch." },
   { id: "q2", cat:"Email", prompt: "Sender: PaypaI Support <support@paypaI.com>", options: ["Legit","Lookalike domain (capital i)","Safe if SPF passes","Undecidable"], correct: 1, explain: "'paypaI' uses uppercase i instead of l." },
   { id: "q3", cat:"Malware", prompt: "Attachment: invoice.zip from unknown vendor", options: ["Open","Report and delete","Forward","Disable AV"], correct: 1, explain: "Unexpected archives often carry malware." },
@@ -92,8 +188,7 @@ const demoQuiz = [
   { id: "q20", cat:"Auth", prompt: "Multiple push MFA prompts at night", options: ["Approve one to stop","Report to security and change password","Turn off MFA","Ignore for days"], correct: 1, explain: "Likely MFA fatigue attack; report and secure account." },
 ];
 
-/* ---------- Glossary ---------- */
-const glossary = [
+const glossary: GlossaryItem[] = [
   { term: "Phishing", aliases:["Phish"], def: "Deceptive attempt to steal data or install malware.", examples:{good:"Report suspicious emails.", bad:"Entering credentials in unknown forms."} },
   { term: "Spear Phishing", aliases:["Spear"], def: "Targeted phishing tailored to a person or role.", examples:{good:"Verify by phone for VIP requests.", bad:"Pay invoice from new address without check."} },
   { term: "Whaling", aliases:[], def: "Executive-targeted spear phishing." },
@@ -108,56 +203,78 @@ const glossary = [
   { term: "MFA Fatigue", aliases:["Push bombing"], def: "Push-bombing to elicit approval." },
 ];
 
-/* ---------- Header (typed) ---------- */
-function Header({
-  tab,
-  setTab,
-}: {
-  tab: Tab;
-  setTab: React.Dispatch<React.SetStateAction<Tab>>;
-}) {
-  const Item: React.FC<{ id: Tab; label: string }> = ({ id, label }) => (
-    <button className={tab === id ? "hover:underline font-bold" : "hover:underline"} onClick={() => setTab(id)}>
+/* ---------- Helpers ---------- */
+async function mockAnalyze({ text, url, file }: { text?: string; url?: string; file?: File | null }): Promise<AnalysisResult> {
+  const base = `${text || ""}\n${url || ""}\n${file ? file.name : ""}`.trim();
+  const hasUrl = /(https?:\/\/[^\s]+)/i.test(base);
+  const urgent = /(urgent|immediately|24\s*hours|verify now|account (locked|closed))/i.test(base);
+  const lookalike = /(paypaI|rnicrosoft|faceb00k|app1e|goog1e)/i.test(base);
+  const findings: Finding[] = [];
+  if (lookalike) findings.push({ type: "lookalike", label: "Lookalike brand", detail: "Possible homoglyphs in brand/domain", severity: "high" });
+  if (hasUrl) findings.push({ type: "links", label: "Contains links", detail: "Verify destination vs domain owner", severity: urgent ? "high" : "med" });
+  if (urgent) findings.push({ type: "urgent-language", label: "Urgent language", detail: "Pressure to act quickly detected", severity: "med" });
+  if (!findings.length) findings.push({ type: "general", label: "No strong cues", detail: "No obvious phishing signals in provided input", severity: "low" });
+  const riskBase = (urgent ? 40 : 10) + (hasUrl ? 20 : 0) + (lookalike ? 30 : 0);
+  const risk = Math.max(5, Math.min(98, riskBase));
+  return new Promise((r) => setTimeout(() => r({ risk, findings, boxes: [] }), 150));
+}
+
+async function analyzeAPI(payload: { text?: string; url?: string; file?: File | null }) {
+  try {
+    const r = await fetch("/api/analyze", {
+      method: "POST",
+      headers: payload.file ? undefined : { "Content-Type": "application/json" },
+      body: payload.file
+        ? (() => { const fd = new FormData(); if (payload.text) fd.append("text", payload.text); if (payload.url) fd.append("url", payload.url); if (payload.file) fd.append("image", payload.file); return fd; })()
+        : JSON.stringify({ text: payload.text, url: payload.url })
+    });
+    if (!r.ok) throw new Error("fallback");
+    return await r.json() as AnalysisResult;
+  } catch { return mockAnalyze(payload); }
+}
+
+function RiskBadge({ score }: { score: number }) {
+  const label = score >= 70 ? "High" : score >= 40 ? "Medium" : "Low";
+  const intent: "destructive" | "secondary" | "default" = score >= 70 ? "destructive" : score >= 40 ? "secondary" : "default";
+  return <Badge variant={intent}>Risk: {label} ({score}%)</Badge>;
+}
+
+/* ---------- Header ---------- */
+function Header({ tab, setTab }: { tab: TabKey; setTab: React.Dispatch<React.SetStateAction<TabKey>> }) {
+  const LinkBtn = ({ id, label }: { id: TabKey; label: string }) => (
+    <button
+      className={`nav-link ${tab === id ? "active" : ""}`}
+      onClick={() => { setTab(id); const el = document.querySelector(`#${id}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+    >
       {label}
     </button>
   );
-
   return (
-    <div className="sticky top-0 z-40 backdrop-blur bg-white/70 border-b">
-      <div className="max-w-7xl mx-auto p-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ShieldAlert className="h-6 w-6" />
-          <span className="font-bold text-xl">PhishGuard</span>
-        </div>
-        <div className="hidden md:flex items-center gap-6 text-sm">
-          <Item id="analysis" label="Analyze" />
-          <Item id="challenges" label="Challenges" />
-          <Item id="learn" label="Learning Hub" />
-          <Item id="analytics" label="Analytics" />
-          <Item id="glossary" label="Glossary" />
+    <div className="app-header">
+      <div className="header-inner">
+        <div className="brand"><ShieldAlert size={22} /> <span>PhishGuard Academy</span></div>
+        <div className="nav">
+          <LinkBtn id="analysis" label="Analyze" />
+          <LinkBtn id="challenges" label="Challenges" />
+          <LinkBtn id="learn" label="Learning Hub" />
+          <LinkBtn id="analytics" label="Analytics" />
+          <LinkBtn id="glossary" label="Glossary" />
         </div>
       </div>
     </div>
   );
 }
 
-/* ---------- Small UI ---------- */
-function RiskBadge({ score }) {
-  const label = score >= 70 ? "High" : score >= 40 ? "Medium" : "Low";
-  const intent = score >= 70 ? "destructive" : score >= 40 ? "secondary" : "default";
-  return <Badge variant={intent}>Risk: {label} ({score}%)</Badge>;
-}
-
-/* ---------- Analysis ---------- */
+/* ---------- Tabs ---------- */
 function AnalysisTab() {
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
-  const [file, setFile] = useState(null);
-  const [imgPreview, setImgPreview] = useState(null);
-  const [result, setResult] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [imgPreview, setImgPreview] = useState<string | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [safeMode, setSafeMode] = useState(true);
-  const canvasRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const doAnalyze = async () => { setLoading(true); const r = await analyzeAPI({ text, url, file }); setResult(r); setLoading(false); };
 
@@ -168,289 +285,285 @@ function AnalysisTab() {
       const c = canvasRef.current; if (!c) return;
       c.width = img.width; c.height = img.height;
       const ctx = c.getContext("2d");
+      if (!ctx) return;
       ctx.drawImage(img, 0, 0);
       if (!result?.boxes?.length) return;
       ctx.lineWidth = 3; ctx.strokeStyle = "red"; ctx.font = "12px sans-serif"; ctx.fillStyle = "rgba(255,0,0,0.15)";
-      result.boxes.forEach(b => {
+      result.boxes.forEach((b) => {
         const x = b.x * img.width, y = b.y * img.height, w = b.w * img.width, h = b.h * img.height;
-        ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h); ctx.fillStyle = "red"; ctx.fillText(b.label, x+4, y+12); ctx.fillStyle = "rgba(255,0,0,0.15)";
+        ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h); ctx.fillStyle = "red"; ctx.fillText(b.label, x + 4, y + 12); ctx.fillStyle = "rgba(255,0,0,0.15)";
       });
     };
     img.src = imgPreview;
   }, [imgPreview, result]);
 
   return (
-    <div id="analysis" className="grid lg:grid-cols-2 gap-6">
+    <motion.div id="analysis" className="grid grid-2 gap-6" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
       <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" />Upload or Paste</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle><Upload size={18} /> Upload or Paste</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <div className="space-y-1">
+          <div>
             <Label htmlFor="text">Paste email text</Label>
-            <Textarea id="text" placeholder="Paste suspicious email content" value={text} onChange={(e)=>setText(e.target.value)} className="min-h-[120px]" />
+            <Textarea id="text" placeholder="Paste suspicious email content" value={text} onChange={(e) => setText(e.target.value)} className="minh-120" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
+          <div className="grid grid-2 gap-3">
+            <div>
               <Label htmlFor="url">URL</Label>
-              <div className="flex gap-2">
-                <Input id="url" placeholder="https://..." value={url} onChange={(e)=>setUrl(e.target.value)} />
-                <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" type="button"><LinkIcon className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Validate link</TooltipContent></Tooltip></TooltipProvider>
+              <div className="row gap-2">
+                <Input id="url" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} />
+                <Button type="button" aria-label="validate-link"><LinkIcon size={16} /></Button>
               </div>
             </div>
-            <div className="space-y-1">
+            <div>
               <Label htmlFor="file">Screenshot</Label>
               <Input
-                id="file"
-                type="file"
-                accept="image/*"
-                onChange={(e)=> {
-                  const f = e.target.files?.[0];
-                  setFile(f || null);
+                id="file" type="file" accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setFile(f);
                   if (f) {
                     const r = new FileReader();
-                    r.onload = () => setImgPreview(r.result);
+                    r.onload = () => setImgPreview(typeof r.result === "string" ? r.result : null);
                     r.readAsDataURL(f);
-                  }
+                  } else setImgPreview(null);
                 }}
               />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Switch id="safe" checked={safeMode} onCheckedChange={setSafeMode}/>
+          <div className="row gap-2">
+            <Switch id="safe" checked={safeMode} onChange={setSafeMode} />
             <Label htmlFor="safe">Safe mode: strip live links</Label>
           </div>
         </CardContent>
-        <CardFooter className="flex items-center justify-between">
-          <div className="text-xs text-muted-foreground">Uses /api/analyze if reachable, else mock.</div>
+        <CardFooter className="row between">
+          <div className="muted xs">Uses /api/analyze if reachable, else mock.</div>
           <Button onClick={doAnalyze} disabled={loading}>{loading ? "Analyzing..." : "Analyze"}</Button>
         </CardFooter>
       </Card>
 
       <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5" />Result</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle><ShieldAlert size={18} /> Result</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          {!result && <div className="text-sm text-muted-foreground">No analysis yet. Upload text, a URL, or a screenshot to begin.</div>}
+          {!result && <div className="muted">No analysis yet. Upload text, a URL, or a screenshot to begin.</div>}
 
           {result && (
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="row gap-3">
                 <RiskBadge score={result.risk} />
-                <Progress value={result.risk} className="w-48"/>
+                <Progress value={result.risk} />
               </div>
 
-              <div className="grid md:grid-cols-2 gap-3">
-                {result.findings.map((f, i)=> (
+              <div className="grid grid-2 gap-3">
+                {result.findings.map((f, i) => (
                   <Alert key={i} variant={f.severity === "high" ? "destructive" : "default"}>
-                    <AlertTitle className="flex items-center gap-2">{f.severity === "high" ? <AlertTriangle className="h-4 w-4" /> : <Info className="h-4 w-4" />}{f.label}</AlertTitle>
+                    <AlertTitle className="row gap-2">{f.severity === "high" ? <AlertTriangle size={16} /> : <Info size={16} />}{f.label}</AlertTitle>
                     <AlertDescription className="text-sm">{f.detail}</AlertDescription>
                   </Alert>
                 ))}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-2 gap-3">
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><FileText className="h-4 w-4" />Text</CardTitle></CardHeader>
-                  <CardContent className="text-xs whitespace-pre-wrap max-h-48 overflow-auto p-2 bg-muted/40 rounded-lg">{text || "—"}</CardContent>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm row gap-2"><ImageIcon size={14} /> Screenshot</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="img-frame">
+                      {imgPreview ? <canvas ref={canvasRef} className="img-canvas" /> :
+                        <div className="img-empty">No image</div>}
+                    </div>
+                    {!result?.boxes?.length && imgPreview && <p className="muted xs mt-2">Image shown. No suspicious text regions detected.</p>}
+                  </CardContent>
                 </Card>
                 <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><ImageIcon className="h-4 w-4" />Screenshot</CardTitle></CardHeader>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm row gap-2"><CheckCircle2 size={14} /> Next steps</CardTitle></CardHeader>
                   <CardContent>
-                    <div className="relative border rounded-lg overflow-hidden">
-                      {imgPreview ? (
-                        <canvas ref={canvasRef} className="w-full max-h-64 object-contain" />
-                      ) : (
-                        <div className="h-64 grid place-items-center text-sm text-muted-foreground">No image</div>
-                      )}
-                    </div>
-                    {!result?.boxes?.length && imgPreview && (
-                      <p className="mt-2 text-xs text-muted-foreground">Image shown. No suspicious text regions detected.</p>
-                    )}
+                    <ul className="bullet">
+                      {[
+                        "Do not click links or attachments.",
+                        "Change reused passwords.",
+                        "Enable multi-factor authentication.",
+                        "Report to email provider and IT/security."
+                      ].map((s, i) => <li key={i}>{s}</li>)}
+                    </ul>
                   </CardContent>
                 </Card>
               </div>
-
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Next steps</CardTitle></CardHeader>
-                <CardContent>
-                  <ul className="list-disc pl-5 text-sm space-y-1">
-                    {[
-                      "Do not click any links or attachments.",
-                      "Change passwords reused on other sites.",
-                      "Enable multi-factor authentication.",
-                      "Report to your email provider and IT/security.",
-                    ].map((s,i)=> <li key={i}>{s}</li>)}
-                  </ul>
-                </CardContent>
-              </Card>
             </div>
           )}
         </CardContent>
       </Card>
-    </div>
+    </motion.div>
   );
 }
 
-/* ---------- Challenges ---------- */
 function ChallengesTab() {
-  const cats = Array.from(new Set(["All", ...demoQuiz.map(q=>q.cat||"Other")]));
-  const [selectedCat, setSelectedCat] = useState("All");
+  const cats = useMemo(() => Array.from(new Set(["All", ...demoQuiz.map(q => q.cat || "Other")])), []);
+  const [selectedCat, setSelectedCat] = useState<string>("All");
   const [randomize, setRandomize] = useState(true);
   const [count, setCount] = useState(10);
 
   const [indices, setIndices] = useState<number[]>([]);
   const [idx, setIdx] = useState(0);
   const [score, setScore] = useState(0);
-  const [answered, setAnswered] = useState<Record<string,{choice:number;correct:boolean}>>({});
+  const [answered, setAnswered] = useState<Record<string, { choice: number; correct: boolean }>>({});
   const [timed, setTimed] = useState(false);
   const [timeLeft, setTimeLeft] = useState(20);
   const [responseTimes, setResponseTimes] = useState<Record<string, number>>({});
 
   const buildRun = () => {
-    const pool = demoQuiz.map((q,i)=>({q,i})).filter(({q})=> selectedCat==="All" ? true : q.cat===selectedCat);
-    const arr = pool.map(p=>p.i);
-    if (randomize) {
-      for (let i=arr.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
-    }
+    const pool = demoQuiz.map((q, i) => ({ q, i })).filter(({ q }) => selectedCat === "All" ? true : q.cat === selectedCat);
+    const arr = pool.map(p => p.i);
+    if (randomize) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } }
     const picked = arr.slice(0, Math.min(count, arr.length));
-    setIndices(picked);
-    setIdx(0);
-    setScore(0);
-    setAnswered({});
-    setResponseTimes({});
-    setTimeLeft(20);
+    setIndices(picked); setIdx(0); setScore(0); setAnswered({}); setResponseTimes({}); setTimeLeft(20);
   };
-  useEffect(buildRun, []);
+  useEffect(buildRun, []); // initial
 
-  useEffect(() => { if (!timed) return; setTimeLeft(20); const t = setInterval(()=>setTimeLeft((s)=> s>0 ? s-1 : 0),1000); return ()=>clearInterval(t); }, [idx, timed]);
+  useEffect(() => {
+    if (!timed) return;
+    setTimeLeft(20);
+    const t = setInterval(() => setTimeLeft((s) => s > 0 ? s - 1 : 0), 1000);
+    return () => clearInterval(t);
+  }, [idx, timed]);
 
   const q = demoQuiz[indices[idx] ?? 0] || demoQuiz[0];
-  const atEnd = idx === indices.length - 1 && answered[q.id];
+  const atEnd = idx === indices.length - 1 && !!answered[q.id];
 
-  const answer = (choice:number) => {
+  const answer = (choice: number) => {
     if (answered[q.id]) return;
     const correct = choice === q.correct;
     setAnswered({ ...answered, [q.id]: { choice, correct } });
     if (timed) setResponseTimes({ ...responseTimes, [q.id]: 20 - timeLeft });
-    if (correct) setScore(score + 1);
-    pushEvent({ type:"submit_quiz_question", qId:q.id, choice, correct });
+    if (correct) setScore((s) => s + 1);
+    pushEvent({ type: "submit_quiz_question", qId: q.id, choice, correct });
   };
-  const next = () => setIdx(Math.min(idx + 1, indices.length - 1));
+  const next = () => setIdx((v) => Math.min(v + 1, indices.length - 1));
   const restart = () => buildRun();
 
   const total = indices.length || 1;
-  const allCorrect = total>0 && Object.values(answered).length===total && Object.values(answered).every(a=>a.correct);
-  const fastAvg = timed && Object.values(responseTimes).length>0 && (Object.values(responseTimes).reduce((a,b)=>a+b,0)/Object.values(responseTimes).length) <= 5;
+  const allCorrect = total > 0 && Object.values(answered).length === total && Object.values(answered).every(a => a.correct);
+  const fastAvg = timed && Object.values(responseTimes).length > 0 &&
+    (Object.values(responseTimes).reduce((a, b) => a + b, 0) / Object.values(responseTimes).length) <= 5;
+
   const badges = [
-    {label:"Link Sleuth", done: score >= 1},
-    {label:"Header Hound", done: score >= 3},
-    {label:"Spoof Spotter", done: score >= 5},
-    {label:"Perfect Run", done: allCorrect},
-    {label:"Speedster", done: !!fastAvg},
-    {label:"Marathoner", done: total >= 15},
+    { label: "Link Sleuth", done: score >= 1 },
+    { label: "Header Hound", done: score >= 3 },
+    { label: "Spoof Spotter", done: score >= 5 },
+    { label: "Perfect Run", done: allCorrect },
+    { label: "Speedster", done: !!fastAvg },
+    { label: "Marathoner", done: total >= 15 },
   ];
 
   return (
-    <div id="challenges" className="grid lg:grid-cols-[2fr,1fr] gap-6">
+    <motion.div id="challenges" className="grid grid-leftwide gap-6" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
       <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><PlayCircle className="h-5 w-5" />Phishing Awareness Challenge</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle><PlayCircle size={18} /> Phishing Awareness Challenge</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid md:grid-cols-3 gap-3 p-3 border rounded">
-            <div className="space-y-1">
+          <div className="grid grid-3 p-3 border rounded">
+            <div>
               <Label>Category</Label>
-              <select className="w-full border rounded px-2 py-1" value={selectedCat} onChange={(e)=>setSelectedCat(e.target.value)}>
-                {cats.map(c=> <option key={c}>{c}</option>)}
+              <select className="input" value={selectedCat} onChange={(e) => setSelectedCat(e.target.value)}>
+                {cats.map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
-            <div className="space-y-1">
+            <div>
               <Label>Question count</Label>
-              <Input type="number" min={1} max={demoQuiz.length} value={count} onChange={(e)=>setCount(parseInt(e.target.value||"1",10))} />
+              <Input type="number" min={1} max={demoQuiz.length} value={count} onChange={(e) => setCount(parseInt(e.target.value || "1", 10))} />
             </div>
-            <div className="space-y-1 flex items-end justify-between">
-              <div className="flex items-center gap-2"><Switch id="rand" checked={randomize} onCheckedChange={setRandomize}/><Label htmlFor="rand">Randomise</Label></div>
-              <Button size="sm" onClick={buildRun}>Start</Button>
+            <div className="row between">
+              <div className="row gap-2">
+                <Switch id="rand" checked={randomize} onChange={setRandomize} />
+                <Label htmlFor="rand">Randomise</Label>
+              </div>
+              <Button onClick={buildRun}>Start</Button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="row between muted">
             <div>Question {Math.min(idx + 1, indices.length)} of {indices.length}</div>
-            <div className="flex items-center gap-2"><Timer className="h-4 w-4" />{timed ? `${timeLeft}s` : "untimed"}</div>
+            <div className="row gap-2"><Timer size={16} />{timed ? `${timeLeft}s` : "untimed"}</div>
           </div>
-          <div className="text-xs text-muted-foreground">Category: <span className="font-medium">{q.cat || '—'}</span></div>
-          <div className="text-lg font-medium">{q.prompt}</div>
-          {q.img && <img src={q.img} alt="question" className="max-h-48 rounded border" />}
+          <div className="xs muted">Category: <span className="bold">{q.cat || "—"}</span></div>
+          <div className="qprompt">{q.prompt}</div>
+          {q.img && <img src={q.img} alt="question" className="qimg" />}
 
           <div className="grid gap-2">
-            {q.options.map((opt, i)=> (
-              <Button key={i} variant={answered[q.id]?.choice === i ? (answered[q.id]?.correct ? "default" : "destructive") : "outline"} className="justify-start" onClick={()=>answer(i)}>
-                {opt}
-              </Button>
-            ))}
+            {q.options.map((opt, i) => {
+              const sel = answered[q.id]?.choice === i;
+              const ok = answered[q.id]?.correct;
+              const variant = sel ? (ok ? "" : "danger") : "outline";
+              return (
+                <Button key={i} className={`wide ${variant}`} onClick={() => answer(i)}>
+                  {opt}
+                </Button>
+              );
+            })}
           </div>
+
           {answered[q.id] && (
             <Alert variant={answered[q.id].correct ? "default" : "destructive"}>
               <AlertTitle>{answered[q.id].correct ? "Correct" : "Incorrect"}</AlertTitle>
               <AlertDescription className="text-sm">{q.explain}</AlertDescription>
             </Alert>
           )}
+
           {atEnd && (
             <Card className="mt-2">
               <CardHeader><CardTitle className="text-base">Summary</CardTitle></CardHeader>
               <CardContent className="text-sm space-y-2">
                 <div>Score: {score} / {indices.length}</div>
-                {timed && Object.keys(responseTimes).length>0 && (
+                {timed && Object.keys(responseTimes).length > 0 && (
                   <div>Avg response time: {(
-                    Object.values(responseTimes).reduce((a,b)=>a+b,0)/Object.values(responseTimes).length
+                    Object.values(responseTimes).reduce((a, b) => a + b, 0) / Object.values(responseTimes).length
                   ).toFixed(1)}s</div>
                 )}
                 <div className="space-y-1">
-                  {indices.map(i=> { const qq=demoQuiz[i]; return answered[qq.id] && !answered[qq.id].correct ? (
-                    <div key={qq.id} className="text-xs">❌ {qq.prompt} — <span className="italic">{qq.explain}</span></div>
-                  ) : null; })}
+                  {indices.map(i => {
+                    const qq = demoQuiz[i];
+                    return answered[qq.id] && !answered[qq.id].correct ? (
+                      <div key={qq.id} className="xs">❌ {qq.prompt} — <span className="italic">{qq.explain}</span></div>
+                    ) : null;
+                  })}
                 </div>
               </CardContent>
             </Card>
           )}
         </CardContent>
-        <CardFooter className="flex items-center justify-between">
-          <div className="text-sm flex items-center gap-2"><Award className="h-4 w-4" />Score: {score}</div>
-          <div className="flex items-center gap-2">
+        <CardFooter className="row between">
+          <div className="row gap-2 text-sm"><Award size={16} />Score: {score}</div>
+          <div className="row gap-2">
             <Label htmlFor="timed" className="text-sm">Timed</Label>
-            <Switch id="timed" checked={timed} onCheckedChange={setTimed} />
+            <Switch id="timed" checked={timed} onChange={setTimed} />
             <Button onClick={next} disabled={idx === indices.length - 1}>Next</Button>
-            <Button variant="outline" onClick={restart}>Restart</Button>
+            <Button className="outline" onClick={restart}>Restart</Button>
           </div>
         </CardFooter>
       </Card>
+
       <div className="grid gap-6">
         <Card>
           <CardHeader><CardTitle className="text-base">Achievements</CardTitle></CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            {badges.map(b=> <Badge key={b.label} variant={b.done?"default":"secondary"}>{b.label}</Badge>)}
+          <CardContent className="badges">
+            {badges.map(b => <Badge key={b.label} variant={b.done ? "default" : "secondary"}>{b.label}</Badge>)}
           </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle className="text-base">Progress</CardTitle></CardHeader>
-          <CardContent><Progress value={(score / (indices.length||1)) * 100} /></CardContent>
+          <CardContent><Progress value={(score / (indices.length || 1)) * 100} /></CardContent>
         </Card>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-/* ---------- Learning Hub ---------- */
 const TOPICS = [
   { id: "lh1", title: "Phishing Patterns", level:"beg", duration:6, prereqIds:[], body:"Hooks: urgency, fear, reward, authority, scarcity. Verify via a second channel." },
   { id: "lh2", title: "Domain Spoofing", level:"beg", duration:7, prereqIds:["lh1"], body:"Check registered domain vs subdomain tricks." },
   { id: "lh3", title: "Social Engineering", level:"int", duration:8, prereqIds:["lh2"], body:"Pretexts: payroll change, invoice update, MFA reset, gift cards." },
   { id: "lh4", title: "Email Auth Basics", level:"int", duration:8, prereqIds:["lh3"], body:"SPF, DKIM, DMARC reduce spoofing but are not guarantees." },
   { id: "lh5", title: "Advanced BEC", level:"adv", duration:10, prereqIds:["lh4"], body:"Invoice fraud, vendor compromise, and payment diversion patterns." },
-];
-const ASSESS = {
+] as const;
+
+const ASSESS: Record<string, { p: string; a: string[]; c: number; r: string }[]> = {
   lh1: [{p:"Which is a common phishing hook?", a:["Detailed privacy policy","Urgent threat","Signed email"], c:1, r:"Urgency pressures mistakes."}],
   lh2: [{p:"Which is the registered domain in login.paypal.com.attacker.co?", a:["login.paypal.com","attacker.co","paypal.com"], c:1, r:"Registered domain is attacker.co."}],
   lh3: [{p:"Gift card request from a 'CEO' is likely:", a:["Standard","BEC attempt","Newsletter"], c:1, r:"Classic BEC pretext."}],
@@ -459,63 +572,70 @@ const ASSESS = {
 };
 
 function LearningHubTab() {
-  const [level, setLevel] = useState("beg");
-  const [progress, setProgress] = useState(load(LS_KEYS.progress, {}));
-  const [expandedId, setExpandedId] = useState(null);
-  const [activeAssess, setActiveAssess] = useState(null);
-  const [choice, setChoice] = useState<number|null>(null);
-  useEffect(()=>save(LS_KEYS.progress, progress), [progress]);
+  const [level, setLevel] = useState<"beg" | "int" | "adv">("beg");
+  const [progress, setProgress] = useState<Record<string, { score: number; passed: boolean }>>(load(LS_KEYS.progress, {}));
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [activeAssess, setActiveAssess] = useState<string | null>(null);
+  const [choice, setChoice] = useState<number | null>(null);
+  useEffect(() => save(LS_KEYS.progress, progress), [progress]);
 
-  const passed = (id) => Boolean(progress[id]?.passed);
-  const canAccess = (t) => t.prereqIds.every(p=>passed(p));
+  const passed = (id: string) => Boolean(progress[id]?.passed);
+  const canAccess = (t: typeof TOPICS[number]) => t.prereqIds.every((p) => passed(p));
 
-  const startLesson = (id) => { setExpandedId(expandedId===id? null : id); pushEvent({ type:"view_lesson", topicId:id }); };
-  const startQuiz = (id) => { setActiveAssess(id); setChoice(null); pushEvent({ type:"start_quiz", topicId:id }); };
-  const submitQuiz = (id, ok) => { pushEvent({ type:"submit_quiz", topicId:id, correct: ok }); setProgress({ ...progress, [id]: { score: ok?100:0, passed: ok } }); setActiveAssess(null); };
+  const startLesson = (id: string) => { setExpandedId(expandedId === id ? null : id); pushEvent({ type: "view_lesson", topicId: id }); };
+  const startQuiz = (id: string) => { setActiveAssess(id); setChoice(null); pushEvent({ type: "start_quiz", topicId: id }); };
+  const submitQuiz = (id: string, ok: boolean) => {
+    pushEvent({ type: "submit_quiz", topicId: id, correct: ok });
+    setProgress({ ...progress, [id]: { score: ok ? 100 : 0, passed: ok } });
+    setActiveAssess(null);
+  };
 
   const levels = [
-    { key:"beg", label:"Beginner" },
-    { key:"int", label:"Intermediate" },
-    { key:"adv", label:"Advanced" },
+    { key: "beg" as const, label: "Beginner" },
+    { key: "int" as const, label: "Intermediate" },
+    { key: "adv" as const, label: "Advanced" },
   ];
 
   return (
-    <div id="learn" className="grid gap-6">
-      <div className="flex items-center gap-2">
-        <BookOpen className="h-5 w-5" />
-        <div className="flex gap-2">
-          {levels.map(l=> (
-            <Button key={l.key} size="sm" variant={level===l.key?"default":"outline"} onClick={()=>setLevel(l.key)}>{l.label}</Button>
+    <motion.div id="learn" className="grid gap-6" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
+      <div className="row gap-2">
+        <BookOpen size={18} />
+        <div className="row gap-2">
+          {levels.map(l => (
+            <Button key={l.key} className={level === l.key ? "" : "outline"} onClick={() => setLevel(l.key)}>{l.label}</Button>
           ))}
         </div>
-        <div className="ml-auto text-xs text-muted-foreground">Progress saves locally.</div>
+        <div className="ml-auto muted xs">Progress saves locally.</div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {TOPICS.filter(t=>t.level===level).map(t=> {
+      <div className="grid grid-2 gap-4">
+        {TOPICS.filter(t => t.level === level).map(t => {
           const unlocked = canAccess(t);
           const p = progress[t.id]?.score || 0;
-          const assessing = activeAssess===t.id;
+          const assessing = activeAssess === t.id;
           const q = ASSESS[t.id][0];
-          const correct = choice===q.c;
+          const correct = choice === q.c;
           return (
-            <Card key={t.id} className={!unlocked?"opacity-60":undefined}>
+            <Card key={t.id} className={!unlocked ? "dim" : ""}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">{!unlocked && <Lock className="h-4 w-4"/>}{t.title} <span className="text-xs text-muted-foreground">· {t.duration} min</span></CardTitle>
+                <CardTitle className="row gap-2">
+                  {!unlocked && <Lock size={16} />}{t.title}
+                  <span className="muted xs">· {t.duration} min</span>
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">{t.body}</p>
+                <p className="muted">{t.body}</p>
                 <Progress value={p} />
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={()=>startLesson(t.id)} disabled={!unlocked}>{expandedId===t.id? 'Close' : 'Open'}</Button>
-                  <Button size="sm" variant="secondary" onClick={()=>startQuiz(t.id)} disabled={!unlocked || passed(t.id)}>Take assessment</Button>
+                <div className="row gap-2">
+                  <Button onClick={() => startLesson(t.id)} disabled={!unlocked}>{expandedId === t.id ? "Close" : "Open"}</Button>
+                  <Button className="secondary" onClick={() => startQuiz(t.id)} disabled={!unlocked || passed(t.id)}>Take assessment</Button>
                   {passed(t.id) && <Badge>Passed</Badge>}
                 </div>
 
-                {expandedId===t.id && (
-                  <div className="mt-3 p-3 rounded border bg-muted/30 text-sm">
-                    <div className="font-medium mb-1">Objectives</div>
-                    <ul className="list-disc pl-5 space-y-1">
+                {expandedId === t.id && (
+                  <div className="lesson">
+                    <div className="bold mb-1">Objectives</div>
+                    <ul className="bullet">
                       <li>Recognize red flags</li>
                       <li>Practice verification steps</li>
                       <li>Apply policy-aligned reporting</li>
@@ -524,18 +644,18 @@ function LearningHubTab() {
                 )}
 
                 {assessing && (
-                  <div className="mt-3 p-3 rounded border">
-                    <div className="text-sm font-medium mb-2">Assessment</div>
-                    <div className="mb-2 text-sm">{q.p}</div>
+                  <div className="quiz">
+                    <div className="bold mb-2">Assessment</div>
+                    <div className="mb-2">{q.p}</div>
                     <div className="grid gap-2 mb-2">
-                      {q.a.map((opt,i)=> (
-                        <Button key={i} variant={choice===i? (i===q.c? 'default':'destructive'):'outline'} className="justify-start" onClick={()=>setChoice(i)}>{opt}</Button>
+                      {q.a.map((opt, i) => (
+                        <Button key={i} className={`wide ${choice === i ? (i === q.c ? "" : "danger") : "outline"}`} onClick={() => setChoice(i)}>{opt}</Button>
                       ))}
                     </div>
-                    <div className="text-xs text-muted-foreground mb-2">{choice!==null ? (correct? 'Correct. ' : 'Incorrect. ')+q.r : 'Select an answer.'}</div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={()=>submitQuiz(t.id, correct)} disabled={choice===null}>Submit</Button>
-                      <Button size="sm" variant="outline" onClick={()=>setActiveAssess(null)}>Cancel</Button>
+                    <div className="xs muted mb-2">{choice !== null ? (correct ? "Correct. " : "Incorrect. ") + q.r : "Select an answer."}</div>
+                    <div className="row gap-2">
+                      <Button onClick={() => submitQuiz(t.id, !!correct)} disabled={choice === null}>Submit</Button>
+                      <Button className="outline" onClick={() => setActiveAssess(null)}>Cancel</Button>
                     </div>
                   </div>
                 )}
@@ -544,62 +664,66 @@ function LearningHubTab() {
           );
         })}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 /* ---------- Analytics ---------- */
 function deriveAnalytics() {
-  const events = load(LS_KEYS.events, []);
-  const perQ = Object.keys(ASSESS).map(id=>{
-    const subs = events.filter(e=>e.type==="submit_quiz" && e.topicId===id);
-    const n = subs.length||1;
-    const correct = subs.filter(s=>s.correct).length;
+  const events = load<EventRecord[]>(LS_KEYS.events, []);
+  const perQ = Object.keys(ASSESS).map(id => {
+    const subs = events.filter(e => e.type === "submit_quiz" && e.topicId === id) as Extract<EventRecord, { type: "submit_quiz" }>[];
+    const n = subs.length || 1;
+    const correct = subs.filter(s => s.correct).length;
     const p = correct / n;
     const wrong = n - correct;
     return { id, n, p: +(p.toFixed(2)), correct, wrong };
   });
-  const byChoice = {};
-  load(LS_KEYS.events, []).filter(e=>e.type==="submit_quiz_question").forEach(e=>{
-    byChoice[e.qId] ||= { total:0, wrong:[0,0,0,0] };
-    byChoice[e.qId].total++;
-    if(!e.correct){ const q = demoQuiz.find(x=>x.id===e.qId); if(q && e.choice<q.options.length) { byChoice[e.qId].wrong[e.choice] = (byChoice[e.qId].wrong[e.choice]||0)+1; } }
+
+  const byChoice: Record<string, { total: number; wrong: number[] }> = {};
+  events.filter(e => e.type === "submit_quiz_question").forEach((e) => {
+    const ev = e as Extract<EventRecord, { type: "submit_quiz_question" }>;
+    byChoice[ev.qId] ||= { total: 0, wrong: [0, 0, 0, 0] };
+    byChoice[ev.qId].total++;
+    const q = demoQuiz.find(x => x.id === ev.qId);
+    if (!ev.correct && q && ev.choice < q.options.length) {
+      byChoice[ev.qId].wrong[ev.choice] = (byChoice[ev.qId].wrong[ev.choice] || 0) + 1;
+    }
   });
-  const confusion = Object.keys(byChoice).map(qId=>{
-    const q = demoQuiz.find(x=>x.id===qId);
-    const wrong = byChoice[qId].wrong.map((v,i)=>({ option:q?.options[i]||`Opt ${i+1}`, count:v||0 }));
+  const confusion = Object.keys(byChoice).map(qId => {
+    const q = demoQuiz.find(x => x.id === qId);
+    const wrong = byChoice[qId].wrong.map((v, i) => ({ option: q?.options[i] || `Opt ${i + 1}`, count: v || 0 }));
     return { qId, wrong };
   });
+
   const steps = [
-    {key:"view_lesson", label:"Viewed lesson"},
-    {key:"start_quiz", label:"Started quiz"},
-    {key:"submit_quiz", label:"Submitted"},
-    {key:"passed", label:"Passed"},
-  ];
-  const totals = Object.fromEntries(steps.map(s=>[s.key,0]));
-  events.forEach(e=>{ if(totals[e.type]!==undefined) totals[e.type]++; if(e.type==="submit_quiz" && e.correct) totals.passed++; });
-  const funnel = steps.map(s=>({ step:s.label, count: totals[s.key] }));
+    { key: "view_lesson", label: "Viewed lesson" },
+    { key: "start_quiz", label: "Started quiz" },
+    { key: "submit_quiz", label: "Submitted" },
+    { key: "passed", label: "Passed" },
+  ] as const;
+  const totals: Record<string, number> = Object.fromEntries(steps.map(s => [s.key, 0]));
+  events.forEach(e => { if (totals[e.type] !== undefined) totals[e.type]++; if (e.type === "submit_quiz" && e.correct) totals.passed++; });
+  const funnel = steps.map(s => ({ step: s.label, count: totals[s.key] }));
+
   return { perQ, confusion, funnel };
 }
 
 function AnalyticsTab() {
-  const tooltipFmt = (value, name) => [value, name];
-  const caption = (t) => (<p className="mt-2 text-xs text-muted-foreground">{t}</p>);
-  const pieLabel = ({ name, percent }) => `${name}: ${(percent*100).toFixed(0)}%`;
-  const { perQ, confusion, funnel } = deriveAnalytics();
+  const { perQ, funnel } = deriveAnalytics();
+  const tooltipFmt = (value: number, name: string) => [value, name] as [number, string];
+  const caption = (t: string) => (<p className="xs muted mt-2">{t}</p>);
 
   return (
-    <div id="dashboard" className="grid lg:grid-cols-2 gap-6">
+    <motion.div id="analytics" className="grid grid-2 gap-6" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
       <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5" />Challenge Success Rates</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle className="row gap-2"><BarChart2 size={18} /> Challenge Success Rates</CardTitle></CardHeader>
         <CardContent className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={demoTrend}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" label={{ value: "Month", position: "insideBottom", offset: -5 }} />
-              <YAxis label={{ value: "Count", angle: -90, position: "insideLeft" }} />
+              <XAxis dataKey="month" />
+              <YAxis />
               <ReTooltip formatter={tooltipFmt} />
               <Legend />
               <Bar dataKey="credentialHarvesting" name="Credential Harvesting" />
@@ -617,9 +741,9 @@ function AnalyticsTab() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={perQ} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" domain={[0,1]} tickFormatter={(v)=>`${Math.round(v*100)}%`} />
+              <XAxis type="number" domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
               <YAxis dataKey="id" type="category" />
-              <ReTooltip formatter={(v)=>`${Math.round(v*100)}% correct`} />
+              <ReTooltip formatter={(v: number) => `${Math.round(v * 100)}% correct`} />
               <Bar dataKey="p" name="% correct" />
             </BarChart>
           </ResponsiveContainer>
@@ -627,8 +751,8 @@ function AnalyticsTab() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg">
-        <CardHeader><CardTitle>Quiz Funnel</CardTitle></CardHeader>
+      <Card className="shadow-lg grid-span-2">
+        <CardHeader><CardTitle className="text-base">Quiz Funnel</CardTitle></CardHeader>
         <CardContent className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={funnel}>
@@ -642,92 +766,94 @@ function AnalyticsTab() {
           {caption("Flow from viewing lessons to passing assessments.")}
         </CardContent>
       </Card>
-
-      <Card className="shadow-lg lg:col-span-2">
-        <CardHeader><CardTitle className="text-base">Misidentified Types Breakdown</CardTitle></CardHeader>
-        <CardContent className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie dataKey="value" data={[{name:"Links", value:56},{name:"Sender", value:24},{name:"Attachments", value:12},{name:"Branding", value:8}]} outerRadius={90} label={pieLabel} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-          {caption("Share of user mistakes by cue type in recent challenges.")}
-        </CardContent>
-      </Card>
-    </div>
+    </motion.div>
   );
 }
 
 /* ---------- Glossary ---------- */
 function GlossaryTab() {
   const [q, setQ] = useState("");
-  const [tag, setTag] = useState("all");
-  const tags = {
-    all: glossary.map(g=>g.term),
-    channels: ["Smishing","Vishing","QRishing"],
-    tactics: ["Homoglyph","Punycode","Link Shortener","BEC"],
+  const [tag, setTag] = useState<"all" | "channels" | "tactics">("all");
+  const tags: Record<"all" | "channels" | "tactics", string[]> = {
+    all: glossary.map(g => g.term),
+    channels: ["Smishing", "Vishing", "QRishing"],
+    tactics: ["Homoglyph", "Punycode", "Link Shortener", "BEC"],
   };
+
   const items = glossary.filter(g => {
-    const hay = (g.term+" "+(g.aliases||[]).join(" ")+" "+g.def).toLowerCase();
-    return (q? hay.includes(q.toLowerCase()): true) && (tag==="all" || tags[tag].includes(g.term));
+    const hay = (g.term + " " + (g.aliases || []).join(" ") + " " + g.def).toLowerCase();
+    return (q ? hay.includes(q.toLowerCase()) : true) && (tag === "all" || tags[tag].includes(g.term));
   });
 
-  const terms = new Set(glossary.map(g=>g.term));
-  const autolink = (text, setQ) => {
-    const re = new RegExp(`\\b(${Array.from(terms).join("|")})\\b`,`gi`);
+  const terms = useMemo(() => new Set(glossary.map(g => g.term)), []);
+  const autolink = (text: string, setQ2: (s: string) => void) => {
+    const re = new RegExp(`\\b(${Array.from(terms).join("|")})\\b`, "gi");
     const parts = text.split(re);
-    return parts.map((p,i)=> terms.has(p) ? <button key={i} className="underline" onClick={()=>setQ(p)} title="Jump to term">{p}</button> : <span key={i}>{p}</span>);
+    return parts.map((p, i) =>
+      terms.has(p) ? <button key={i} className="underline linklike" onClick={() => setQ2(p)} title="Jump to term">{p}</button> : <span key={i}>{p}</span>
+    );
   };
 
   const termOfDay = glossary[(new Date().getDate()) % glossary.length];
+
   return (
-    <div id="glossary" className="grid gap-4">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Search className="h-4 w-4" />
-        <Input placeholder="Search terms" value={q} onChange={(e)=>setQ(e.target.value)} className="max-w-sm" />
-        <div className="flex items-center gap-2 text-xs">
+    <motion.div id="glossary" className="grid gap-4" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
+      <div className="row gap-2 wrap">
+        <Search size={16} />
+        <Input placeholder="Search terms" value={q} onChange={(e) => setQ(e.target.value)} className="maxw-sm" />
+        <div className="row gap-2 xs">
           <span>Filter:</span>
-          {["all","channels","tactics"].map(t => (
-            <Button key={t} size="sm" variant={tag===t?"default":"outline"} onClick={()=>setTag(t)}>{t}</Button>
+          {(["all", "channels", "tactics"] as const).map(t => (
+            <Button key={t} className={tag === t ? "" : "outline"} onClick={() => setTag(t)}>{t}</Button>
           ))}
         </div>
       </div>
-      <Card className="bg-muted/40">
+
+      <Card className="muted-bg">
         <CardHeader className="pb-2"><CardTitle className="text-base">Term of the day</CardTitle></CardHeader>
-        <CardContent className="text-sm"><span className="font-medium">{termOfDay.term}:</span> {termOfDay.def}</CardContent>
+        <CardContent className="text-sm"><span className="bold">{termOfDay.term}:</span> {termOfDay.def}</CardContent>
       </Card>
-      <div className="grid md:grid-cols-2 gap-3">
-        {items.map((g,i)=> (
+
+      <div className="grid grid-2 gap-3">
+        {items.map((g, i) => (
           <Card key={i}>
             <CardHeader className="pb-1"><CardTitle className="text-base">{g.term}</CardTitle></CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-2">
+            <CardContent className="text-sm muted space-y-2">
               <div>{autolink(g.def, setQ)}</div>
-              {g.aliases?.length ? <div className="text-xs">Aliases: {g.aliases.join(", ")}</div> : null}
+              {g.aliases?.length ? <div className="xs">Aliases: {g.aliases.join(", ")}</div> : null}
               {g.examples && (
-                <div className="text-xs"><span className="font-medium">Example:</span> {g.examples.good} <span className="font-medium">Counter:</span> {g.examples.bad}</div>
+                <div className="xs"><span className="bold">Example:</span> {g.examples.good} <span className="bold">Counter:</span> {g.examples.bad}</div>
               )}
             </CardContent>
           </Card>
         ))}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-/* ---------- App ---------- */
-export default function PhishGuardApp() {
-  const [tab, setTab] = useState<Tab>("analysis");
+/* ---------- Shell ---------- */
+function Page({ tab }: { tab: TabKey }) {
   return (
-    <div className="p-4">
+    <AnimatePresence mode="wait">
+      {tab === "analysis" && <AnalysisTab key="analysis" />}
+      {tab === "challenges" && <ChallengesTab key="challenges" />}
+      {tab === "learn" && <LearningHubTab key="learn" />}
+      {tab === "analytics" && <AnalyticsTab key="analytics" />}
+      {tab === "glossary" && <GlossaryTab key="glossary" />}
+    </AnimatePresence>
+  );
+}
+
+export default function App() {
+  const [tab, setTab] = useState<TabKey>("analysis");
+  return (
+    <div className="app">
       <Header tab={tab} setTab={setTab} />
-      <main className="max-w-7xl mx-auto grid gap-10">
-        {tab === "analysis" && <AnalysisTab />}
-        {tab === "challenges" && <ChallengesTab />}
-        {tab === "learn" && <LearningHubTab />}
-        {tab === "analytics" && <AnalyticsTab />}
-        {tab === "glossary" && <GlossaryTab />}
+      <main className="container">
+        <Page tab={tab} />
       </main>
+      <footer className="footer xs muted">© {new Date().getFullYear()} PhishGuard Academy</footer>
     </div>
   );
 }
