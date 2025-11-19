@@ -221,7 +221,7 @@ async function mockAnalyze({ text, url, file }: { text?: string; url?: string; f
 
 async function analyzeAPI(payload: { text?: string; url?: string; file?: File | null }) {
   try {
-    const r = await fetch("/api/analyze", {
+    const r = await fetch("http://localhost:8000/api/analyze", {
       method: "POST",
       headers: payload.file ? undefined : { "Content-Type": "application/json" },
       body: payload.file
