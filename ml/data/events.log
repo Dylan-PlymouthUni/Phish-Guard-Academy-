@@ -1,0 +1,2 @@
+{"ts": "2025-12-02T20:51:35.689486Z", "text_len": 37, "url": "https://www.plymouth.ac.uk", "domain": "www.plymouth.ac.uk", "risk": 0, "severity": "low", "ml_risk": 0, "heuristic_risk": 0, "engine": "hybrid_v1"}
+{"ts": "2025-12-02T20:51:35.738740Z", "text_len": 80, "url": "http://security-paypal.com/login", "domain": "security-paypal.com", "risk": 27, "severity": "low", "ml_risk": 0, "heuristic_risk": 45, "engine": "hybrid_v1"}

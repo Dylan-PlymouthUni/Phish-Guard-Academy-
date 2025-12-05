@@ -219,19 +219,47 @@ async function mockAnalyze({ text, url, file }: { text?: string; url?: string; f
   return new Promise((r) => setTimeout(() => r({ risk, findings, boxes: [] }), 150));
 }
 
-async function analyzeAPI(payload: { text?: string; url?: string; file?: File | null }) {
+async function analyzeAPI(payload: {
+  text?: string;
+  url?: string;
+  file?: File | null;
+}) {
   try {
-    const r = await fetch("http://localhost:8000/api/analyze", {
+    const res = await fetch("/api/analyze", {
       method: "POST",
-      headers: payload.file ? undefined : { "Content-Type": "application/json" },
+      headers: payload.file
+        ? undefined
+        : { "Content-Type": "application/json" },
       body: payload.file
-        ? (() => { const fd = new FormData(); if (payload.text) fd.append("text", payload.text); if (payload.url) fd.append("url", payload.url); if (payload.file) fd.append("image", payload.file); return fd; })()
-        : JSON.stringify({ text: payload.text, url: payload.url })
+        ? (() => {
+            const fd = new FormData();
+            if (payload.text) fd.append("text", payload.text);
+            if (payload.url) fd.append("url", payload.url);
+            if (payload.file) fd.append("image", payload.file);
+            return fd;
+          })()
+        : JSON.stringify({
+            text: payload.text ?? "",
+            url: payload.url ?? "",
+          }),
     });
-    if (!r.ok) throw new Error("fallback");
-    return await r.json() as AnalysisResult;
-  } catch { return mockAnalyze(payload); }
+
+    if (!res.ok) {
+      throw new Error("backend error");
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.error("analyzeAPI failed, falling back to mockAnalyze", err);
+    // Fallback to the heuristic JS model you already have
+    return mockAnalyze({
+      text: payload.text ?? "",
+      url: payload.url ?? "",
+      file: payload.file ?? null,
+    });
+  }
 }
+
 
 function RiskBadge({ score }: { score: number }) {
   const label = score >= 70 ? "High" : score >= 40 ? "Medium" : "Low";

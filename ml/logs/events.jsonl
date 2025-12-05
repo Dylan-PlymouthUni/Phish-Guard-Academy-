@@ -1,0 +1,5 @@
+{"ts": "2025-12-02T17:44:24.459070Z", "text_len": 37, "url": "https://www.plymouth.ac.uk", "risk": 10, "severity": "low", "heuristic_risk": 10, "ml_risk": 0, "engine": "hybrid_v1"}
+{"ts": "2025-12-02T17:44:24.534195Z", "text_len": 127, "url": "http://secure-login-paypal.com/verify", "risk": 85, "severity": "high", "heuristic_risk": 85, "ml_risk": 0, "engine": "hybrid_v1"}
+{"ts": "2025-12-02T17:54:51.565049Z", "text_len": 37, "url": "https://www.plymouth.ac.uk", "risk": 10, "severity": "low", "heuristic_risk": 10, "ml_risk": 0, "engine": "hybrid_v1"}
+{"ts": "2025-12-02T17:54:51.622332Z", "text_len": 127, "url": "http://secure-login-paypal.com/verify", "risk": 85, "severity": "high", "heuristic_risk": 85, "ml_risk": 0, "engine": "hybrid_v1"}
+{"ts": "2025-12-02T19:33:09.668065Z", "text_len": 80, "url": "http://secure-login-paypal.com/verify", "risk": 85, "severity": "high", "heuristic_risk": 85, "ml_risk": 0, "engine": "hybrid_v1"}
