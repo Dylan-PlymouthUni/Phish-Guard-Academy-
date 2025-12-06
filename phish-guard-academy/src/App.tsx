@@ -1,4 +1,4 @@
-// @ts-nocheck 
+// @ts-nocheck
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import {
@@ -10,12 +10,6 @@ import {
   CartesianGrid, Tooltip as ReTooltip, Legend
 } from "recharts";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  logAnalysis,
-  logChallengeAnswer,
-  logLessonEvent,
-  getAnalyticsSummary,
-} from "./lib/analytics";
 
 /* ---------- Types ---------- */
 type TabKey = "analysis" | "challenges" | "learn" | "analytics" | "glossary";
@@ -51,6 +45,12 @@ type GlossaryItem = {
   def: string;
   examples?: { good: string; bad: string };
 };
+
+type EventRecord =
+  | { ts: number; type: "view_lesson"; topicId: string }
+  | { ts: number; type: "start_quiz"; topicId: string }
+  | { ts: number; type: "submit_quiz"; topicId: string; correct: boolean }
+  | { ts: number; type: "submit_quiz_question"; qId: string; choice: number; correct: boolean };
 
 /* ---------- Lightweight UI primitives (typed) ---------- */
 type Children = { children?: React.ReactNode };
@@ -139,15 +139,21 @@ export function Alert(
 export function AlertTitle({ children }: Children) { return <div className="alert-title">{children}</div>; }
 export function AlertDescription({ children }: Children) { return <div className="alert-desc">{children}</div>; }
 
-/* ---------- Storage helpers (local lesson progress only) ---------- */
+/* ---------- Storage helpers ---------- */
 const LS_KEYS = {
   progress: "pg_progress_v1",
+  events: "pg_events_v1",
 };
-
 function load<T>(k: string, def: T): T {
   try { const v = JSON.parse(localStorage.getItem(k) || "null"); return (v ?? def) as T; } catch { return def; }
 }
 function save<T>(k: string, v: T) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function pushEvent(evt: Omit<EventRecord, "ts">) {
+  if (typeof window === "undefined") return;
+  const ev = load<EventRecord[]>(LS_KEYS.events, []);
+  ev.push({ ts: Date.now(), ...evt } as EventRecord);
+  save(LS_KEYS.events, ev);
+}
 
 /* ---------- Demo data ---------- */
 const demoTrend = [
@@ -245,7 +251,6 @@ async function analyzeAPI(payload: {
     return await res.json();
   } catch (err) {
     console.error("analyzeAPI failed, falling back to mockAnalyze", err);
-    // Fallback to the heuristic JS model you already have
     return mockAnalyze({
       text: payload.text ?? "",
       url: payload.url ?? "",
@@ -297,16 +302,7 @@ function AnalysisTab() {
   const [safeMode, setSafeMode] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const doAnalyze = async () => {
-    setLoading(true);
-    const r = await analyzeAPI({ text, url, file });
-    setResult(r);
-    // log into analytics pipeline
-    if (typeof r?.risk === "number") {
-      logAnalysis(r.risk);
-    }
-    setLoading(false);
-  };
+  const doAnalyze = async () => { setLoading(true); const r = await analyzeAPI({ text, url, file }); setResult(r); setLoading(false); };
 
   useEffect(() => {
     if (!imgPreview) return;
@@ -464,8 +460,7 @@ function ChallengesTab() {
     setAnswered({ ...answered, [q.id]: { choice, correct } });
     if (timed) setResponseTimes({ ...responseTimes, [q.id]: 20 - timeLeft });
     if (correct) setScore((s) => s + 1);
-    // log challenge answer into analytics
-    logChallengeAnswer(q.cat, correct);
+    pushEvent({ type: "submit_quiz_question", qId: q.id, choice, correct });
   };
   const next = () => setIdx((v) => Math.min(v + 1, indices.length - 1));
   const restart = () => buildRun();
@@ -613,18 +608,10 @@ function LearningHubTab() {
   const passed = (id: string) => Boolean(progress[id]?.passed);
   const canAccess = (t: typeof TOPICS[number]) => t.prereqIds.every((p) => passed(p));
 
-  const startLesson = (id: string) => {
-    setExpandedId(expandedId === id ? null : id);
-    logLessonEvent(id, "opened");
-  };
-  const startQuiz = (id: string) => {
-    setActiveAssess(id);
-    setChoice(null);
-  };
+  const startLesson = (id: string) => { setExpandedId(expandedId === id ? null : id); pushEvent({ type: "view_lesson", topicId: id }); };
+  const startQuiz = (id: string) => { setActiveAssess(id); setChoice(null); pushEvent({ type: "start_quiz", topicId: id }); };
   const submitQuiz = (id: string, ok: boolean) => {
-    if (ok) {
-      logLessonEvent(id, "completed");
-    }
+    pushEvent({ type: "submit_quiz", topicId: id, correct: ok });
     setProgress({ ...progress, [id]: { score: ok ? 100 : 0, passed: ok } });
     setActiveAssess(null);
   };
@@ -708,24 +695,49 @@ function LearningHubTab() {
 }
 
 /* ---------- Analytics ---------- */
+function deriveAnalytics() {
+  const events = load<EventRecord[]>(LS_KEYS.events, []);
+  const perQ = Object.keys(ASSESS).map(id => {
+    const subs = events.filter(e => e.type === "submit_quiz" && e.topicId === id) as Extract<EventRecord, { type: "submit_quiz" }>[];
+    const n = subs.length || 1;
+    const correct = subs.filter(s => s.correct).length;
+    const p = correct / n;
+    const wrong = n - correct;
+    return { id, n, p: +(p.toFixed(2)), correct, wrong };
+  });
+
+  const byChoice: Record<string, { total: number; wrong: number[] }> = {};
+  events.filter(e => e.type === "submit_quiz_question").forEach((e) => {
+    const ev = e as Extract<EventRecord, { type: "submit_quiz_question" }>;
+    byChoice[ev.qId] ||= { total: 0, wrong: [0, 0, 0, 0] };
+    byChoice[ev.qId].total++;
+    const q = demoQuiz.find(x => x.id === ev.qId);
+    if (!ev.correct && q && ev.choice < q.options.length) {
+      byChoice[ev.qId].wrong[ev.choice] = (byChoice[ev.qId].wrong[ev.choice] || 0) + 1;
+    }
+  });
+  const confusion = Object.keys(byChoice).map(qId => {
+    const q = demoQuiz.find(x => x.id === qId);
+    const wrong = byChoice[qId].wrong.map((v, i) => ({ option: q?.options[i] || `Opt ${i + 1}`, count: v || 0 }));
+    return { qId, wrong };
+  });
+
+  const steps = [
+    { key: "view_lesson", label: "Viewed lesson" },
+    { key: "start_quiz", label: "Started quiz" },
+    { key: "submit_quiz", label: "Submitted" },
+    { key: "passed", label: "Passed" },
+  ] as const;
+  const totals: Record<string, number> = Object.fromEntries(steps.map(s => [s.key, 0]));
+  events.forEach(e => { if (totals[e.type] !== undefined) totals[e.type]++; if (e.type === "submit_quiz" && e.correct) totals.passed++; });
+  const funnel = steps.map(s => ({ step: s.label, count: totals[s.key] }));
+
+  return { perQ, confusion, funnel };
+}
+
 function AnalyticsTab() {
-  const summary = useMemo(() => getAnalyticsSummary(), []);
-  const { challenges, lessons, analysis } = summary;
-
-  const funnelData = [
-    { step: "Questions answered", count: challenges.totalAnswers },
-    { step: "Lessons started", count: lessons.opened },
-    { step: "Lessons completed", count: lessons.completed },
-  ];
-
-  const riskData = [
-    { bucket: "Low", value: analysis.riskCounts.low },
-    { bucket: "Medium", value: analysis.riskCounts.medium },
-    { bucket: "High", value: analysis.riskCounts.high },
-  ];
-
+  const { perQ, funnel } = deriveAnalytics();
   const tooltipFmt = (value: number, name: string) => [value, name] as [number, string];
-
   const caption = (t: string) => (<p className="xs muted mt-2">{t}</p>);
 
   return (
@@ -733,75 +745,51 @@ function AnalyticsTab() {
       <Card className="shadow-lg">
         <CardHeader><CardTitle className="row gap-2"><BarChart2 size={18} /> Challenge Success Rates</CardTitle></CardHeader>
         <CardContent className="h-72">
-          {challenges.totalAnswers === 0 ? (
-            <p className="text-sm text-slate-500">
-              Complete some challenges to see your stats here.
-            </p>
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={[{ label: "Overall", pct: challenges.avgScore / 100 }]}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="label" />
-                  <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
-                  <ReTooltip formatter={(v: number) => `${Math.round(v * 100)}% correct`} />
-                  <Bar dataKey="pct" name="% correct" />
-                </BarChart>
-              </ResponsiveContainer>
-              {caption("Average correctness across answered challenge questions.")}
-            </>
-          )}
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={demoTrend}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <ReTooltip formatter={tooltipFmt} />
+              <Legend />
+              <Bar dataKey="credentialHarvesting" name="Credential Harvesting" />
+              <Bar dataKey="invoiceFraud" name="Invoice Fraud" />
+              <Bar dataKey="extortion" name="Extortion" />
+            </BarChart>
+          </ResponsiveContainer>
+          {caption("Counts of detected scenario types answered correctly by month.")}
         </CardContent>
       </Card>
 
       <Card className="shadow-lg">
-        <CardHeader><CardTitle>Risk Distribution</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Item Analysis</CardTitle></CardHeader>
         <CardContent className="h-72">
-          {analysis.totalAnalyses === 0 ? (
-            <p className="text-sm text-slate-500">
-              Run a few analyses on the Analyse tab to populate this chart.
-            </p>
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={riskData}
-                    dataKey="value"
-                    nameKey="bucket"
-                    label
-                  />
-                  <Legend />
-                  <ReTooltip formatter={tooltipFmt} />
-                </PieChart>
-              </ResponsiveContainer>
-              {caption("Distribution of low/medium/high risk decisions from Analyse.")}
-            </>
-          )}
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={perQ} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
+              <YAxis dataKey="id" type="category" />
+              <ReTooltip formatter={(v: number) => `${Math.round(v * 100)}% correct`} />
+              <Bar dataKey="p" name="% correct" />
+            </BarChart>
+          </ResponsiveContainer>
+          {caption("Per-topic correctness. Low % indicates difficult items needing review.")}
         </CardContent>
       </Card>
 
       <Card className="shadow-lg grid-span-2">
         <CardHeader><CardTitle className="text-base">Quiz Funnel</CardTitle></CardHeader>
         <CardContent className="h-72">
-          {funnelData.every(d => d.count === 0) ? (
-            <p className="text-sm text-slate-500">
-              Start lessons and quizzes to see how users progress through the learning funnel.
-            </p>
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={funnelData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="step" />
-                  <YAxis />
-                  <ReTooltip />
-                  <Bar dataKey="count" name="Events" />
-                </BarChart>
-              </ResponsiveContainer>
-              {caption("Flow from answering questions to starting and completing lessons.")}
-            </>
-          )}
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={funnel}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="step" />
+              <YAxis />
+              <ReTooltip />
+              <Bar dataKey="count" name="Users" />
+            </BarChart>
+          </ResponsiveContainer>
+          {caption("Flow from viewing lessons to passing assessments.")}
         </CardContent>
       </Card>
     </motion.div>

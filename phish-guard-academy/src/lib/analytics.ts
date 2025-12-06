@@ -1,146 +1,148 @@
 export type RiskBucket = "low" | "medium" | "high";
 
-export interface AnalysisEvent {
-  kind: "analysis";
-  timestamp: string;
-  risk: RiskBucket;
+type AnalyticsStore = {
+  analysis: {
+    totalAnalyses: number;
+    riskCounts: Record<RiskBucket, number>;
+  };
+  challenges: {
+    totalAnswers: number;
+    correctAnswers: number;
+    byCategory: Record<string, { total: number; correct: number }>;
+  };
+  lessons: {
+    opened: number;
+    completed: number;
+    byTopic: Record<string, { opened: number; completed: number }>;
+  };
+};
+
+const LS_KEY = "pg_analytics_v1";
+
+function getDefaultStore(): AnalyticsStore {
+  return {
+    analysis: {
+      totalAnalyses: 0,
+      riskCounts: { low: 0, medium: 0, high: 0 },
+    },
+    challenges: {
+      totalAnswers: 0,
+      correctAnswers: 0,
+      byCategory: {},
+    },
+    lessons: {
+      opened: 0,
+      completed: 0,
+      byTopic: {},
+    },
+  };
 }
 
-export interface ChallengeEvent {
-  kind: "challenge";
-  timestamp: string;
-  category: string;
-  correct: boolean;
-}
-
-export interface LessonEvent {
-  kind: "lesson";
-  timestamp: string;
-  topicId: string;
-  event: "opened" | "completed";
-}
-
-export type AnalyticsEvent = AnalysisEvent | ChallengeEvent | LessonEvent;
-
-const STORAGE_KEY = "pga_analytics_v1";
-
-function loadEvents(): AnalyticsEvent[] {
-  if (typeof window === "undefined") return [];
+function loadStore(): AnalyticsStore {
+  if (typeof window === "undefined") return getDefaultStore();
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as AnalyticsEvent[];
+    const raw = window.localStorage.getItem(LS_KEY);
+    if (!raw) return getDefaultStore();
+    const parsed = JSON.parse(raw);
+    return {
+      ...getDefaultStore(),
+      ...(parsed || {}),
+    };
   } catch {
-    return [];
+    return getDefaultStore();
   }
 }
 
-function saveEvents(events: AnalyticsEvent[]) {
+function saveStore(store: AnalyticsStore) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+    window.localStorage.setItem(LS_KEY, JSON.stringify(store));
   } catch {
-    // ignore quota / private mode issues
+    // ignore quota errors
   }
 }
 
-function addEvent(e: AnalyticsEvent) {
-  const events = loadEvents();
-  events.push(e);
-  saveEvents(events);
-}
+/* ---------- Public logging API ---------- */
 
-/* ---- PUBLIC API ---- */
-
-export function logAnalysis(riskScore: number) {
+export function logAnalysis(risk: number) {
+  const store = loadStore();
   const bucket: RiskBucket =
-    riskScore >= 70 ? "high" : riskScore >= 40 ? "medium" : "low";
+    risk >= 70 ? "high" : risk >= 40 ? "medium" : "low";
 
-  addEvent({
-    kind: "analysis",
-    timestamp: new Date().toISOString(),
-    risk: bucket,
-  });
+  store.analysis.totalAnalyses += 1;
+  store.analysis.riskCounts[bucket] =
+    (store.analysis.riskCounts[bucket] || 0) + 1;
+
+  saveStore(store);
 }
 
 export function logChallengeAnswer(category: string, correct: boolean) {
-  addEvent({
-    kind: "challenge",
-    timestamp: new Date().toISOString(),
-    category,
-    correct,
-  });
+  const store = loadStore();
+  const cat = category || "Uncategorised";
+
+  store.challenges.totalAnswers += 1;
+  if (correct) store.challenges.correctAnswers += 1;
+
+  if (!store.challenges.byCategory[cat]) {
+    store.challenges.byCategory[cat] = { total: 0, correct: 0 };
+  }
+  store.challenges.byCategory[cat].total += 1;
+  if (correct) store.challenges.byCategory[cat].correct += 1;
+
+  saveStore(store);
 }
 
-export function logLessonEvent(
-  topicId: string,
-  event: "opened" | "completed",
-) {
-  addEvent({
-    kind: "lesson",
-    timestamp: new Date().toISOString(),
-    topicId,
-    event,
-  });
+export function logLessonEvent(topicId: string, event: "opened" | "completed") {
+  const store = loadStore();
+  const id = topicId || "unknown";
+  if (!store.lessons.byTopic[id]) {
+    store.lessons.byTopic[id] = { opened: 0, completed: 0 };
+  }
+
+  if (event == "opened") {
+    store.lessons.opened += 1;
+    store.lessons.byTopic[id].opened += 1;
+  } else if (event == "completed") {
+    store.lessons.completed += 1;
+    store.lessons.byTopic[id].completed += 1;
+  }
+
+  saveStore(store);
 }
+
+/* ---------- Aggregated summary for UI ---------- */
 
 export function getAnalyticsSummary() {
-  const events = loadEvents();
+  const store = loadStore();
 
-  const challengeEvents = events.filter(
-    (e): e is ChallengeEvent => e.kind === "challenge",
-  );
-  const lessonEvents = events.filter(
-    (e): e is LessonEvent => e.kind === "lesson",
-  );
-  const analysisEvents = events.filter(
-    (e): e is AnalysisEvent => e.kind === "analysis",
-  );
+  const { totalAnswers, correctAnswers, byCategory } = store.challenges;
+  const avgScore =
+    totalAnswers > 0 ? (correctAnswers / totalAnswers) * 100 : 0;
 
-  const totalAnswers = challengeEvents.length;
-  const correctAnswers = challengeEvents.filter((e) => e.correct).length;
-  const avgScore = totalAnswers ? (correctAnswers / totalAnswers) * 100 : 0;
-
-  const perCategory: Record<string, { total: number; correct: number }> = {};
-  for (const e of challengeEvents) {
-    if (!perCategory[e.category]) {
-      perCategory[e.category] = { total: 0, correct: 0 };
-    }
-    perCategory[e.category].total += 1;
-    if (e.correct) perCategory[e.category].correct += 1;
-  }
-
-  const openedLessons = new Set(
-    lessonEvents.filter((e) => e.event === "opened").map((e) => e.topicId),
+  const categoryBreakdown = Object.entries(byCategory).map(
+    ([cat, { total, correct }]) => ({
+      category: cat,
+      total,
+      correct,
+      pct: total > 0 ? +( (correct / total) * 100 ).toFixed(1) : 0,
+    })
   );
-  const completedLessons = new Set(
-    lessonEvents.filter((e) => e.event === "completed").map((e) => e.topicId),
-  );
-
-  const riskCounts: Record<RiskBucket, number> = {
-    low: 0,
-    medium: 0,
-    high: 0,
-  };
-  for (const e of analysisEvents) {
-    riskCounts[e.risk] += 1;
-  }
-  const totalAnalyses = analysisEvents.length;
 
   return {
+    analysis: {
+      totalAnalyses: store.analysis.totalAnalyses,
+      riskCounts: store.analysis.riskCounts,
+    },
     challenges: {
       totalAnswers,
       correctAnswers,
       avgScore,
-      perCategory,
+      byCategory: categoryBreakdown,
     },
     lessons: {
-      opened: openedLessons.size,
-      completed: completedLessons.size,
-    },
-    analysis: {
-      totalAnalyses,
-      riskCounts,
+      opened: store.lessons.opened,
+      completed: store.lessons.completed,
+      byTopic: store.lessons.byTopic,
     },
   };
 }
