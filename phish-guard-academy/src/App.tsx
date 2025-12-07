@@ -225,7 +225,7 @@ async function analyzeAPI(payload: {
   file?: File | null;
 }) {
   try {
-    const res = await fetch("/api/analyze", {
+    try { const res = await fetch("http://127.0.0.1:8000/analyze", {
       method: "POST",
       headers: payload.file
         ? undefined
@@ -248,7 +248,7 @@ async function analyzeAPI(payload: {
       throw new Error("backend error");
     }
 
-    return await res.json();
+    return await res.json(); } catch (err) { console.error("Analyze API failed:", err); return { risk: 0, severity: "error", findings: ["Backend offline or misconfigured."], ocr_text: "", boxes: [] }; }
   } catch (err) {
     console.error("analyzeAPI failed, falling back to mockAnalyze", err);
     return mockAnalyze({
@@ -376,6 +376,7 @@ function AnalysisTab() {
             <div className="space-y-4">
               <div className="row gap-3">
                 <RiskBadge score={result.risk} />
+    <div className="text-xs muted">ML Risk: {result.ml_risk}% (confidence {Math.round(result.ml_confidence * 100)}%)</div>
                 <Progress value={result.risk} />
               </div>
 
@@ -397,6 +398,7 @@ function AnalysisTab() {
                         <div className="img-empty">No image</div>}
                     </div>
                     {!result?.boxes?.length && imgPreview && <p className="muted xs mt-2">Image shown. No suspicious text regions detected.</p>}
+    {result?.ocr_text && <div className="mt-2 text-xs muted">OCR extracted: {result.ocr_text}</div>}
                   </CardContent>
                 </Card>
                 <Card>
