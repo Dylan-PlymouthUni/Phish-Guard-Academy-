@@ -145,9 +145,9 @@ const LS_KEYS = {
   events: "pg_events_v1",
 };
 function load<T>(k: string, def: T): T {
-  try { const v = JSON.parse(localStorage.getItem(k) || "null"); return (v ?? def) as T; } catch { return def; }
+  try { const v = JSON.parse(typeof window !== "undefined" ? localStorage.getItem(k) : null || "null"); return (v ?? def) as T; } catch { return def; }
 }
-function save<T>(k: string, v: T) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function save<T>(k: string, v: T) { try { if (typeof window !== "undefined") localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function pushEvent(evt: Omit<EventRecord, "ts">) {
   if (typeof window === "undefined") return;
   const ev = load<EventRecord[]>(LS_KEYS.events, []);
@@ -235,7 +235,7 @@ async function analyzeAPI(payload: {
             const fd = new FormData();
             if (payload.text) fd.append("text", payload.text);
             if (payload.url) fd.append("url", payload.url);
-            if (payload.file) fd.append("image", payload.file);
+            if (payload.file) fd.append("image", payload.file, payload.file.name);
             return fd;
           })()
         : JSON.stringify({
@@ -376,6 +376,9 @@ function AnalysisTab() {
             <div className="space-y-4">
               <div className="row gap-3">
                 <RiskBadge score={result.risk} />
+<p className="xs muted">Heuristic Risk: {result.heuristic_risk}% ({result.heuristic_severity})</p> 
+<p className="xs muted">ML Risk: {result.ml_risk}% (confidence {result.ml_confidence})</p> 
+{result.ocr_text && <p className="xs muted">OCR: {result.ocr_text}</p>}
     <div className="text-xs muted">ML Risk: {result.ml_risk}% (confidence {Math.round(result.ml_confidence * 100)}%)</div>
                 <Progress value={result.risk} />
               </div>
@@ -887,37 +890,3 @@ export default function App() {
 }
 
 // -------------------- FIXED analyzeAPI --------------------
-async function analyzeAPI(payload: {
-  text?: string;
-  url?: string;
-  file?: File | null;
-}) {
-  try {
-    // Always use FormData — supports text, URL, and screenshot
-    const fd = new FormData();
-    fd.append("text", payload.text ?? "");
-    fd.append("url", payload.url ?? "");
-    if (payload.file) {
-      fd.append("image", payload.file);
-    }
-
-    const res = await fetch("/api/analyze", {
-      method: "POST",
-      body: fd
-    });
-
-    if (!res.ok) {
-      throw new Error("backend error");
-    }
-
-    return await res.json();
-  } catch (err) {
-    console.error("analyzeAPI failed", err);
-    return {
-      risk: 0,
-      severity: "low",
-      findings: ["Error contacting backend"],
-      engine: "client-fallback"
-    };
-  }
-}
