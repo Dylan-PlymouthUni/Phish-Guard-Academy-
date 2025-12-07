@@ -885,3 +885,39 @@ export default function App() {
     </div>
   );
 }
+
+// -------------------- FIXED analyzeAPI --------------------
+async function analyzeAPI(payload: {
+  text?: string;
+  url?: string;
+  file?: File | null;
+}) {
+  try {
+    // Always use FormData — supports text, URL, and screenshot
+    const fd = new FormData();
+    fd.append("text", payload.text ?? "");
+    fd.append("url", payload.url ?? "");
+    if (payload.file) {
+      fd.append("image", payload.file);
+    }
+
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      body: fd
+    });
+
+    if (!res.ok) {
+      throw new Error("backend error");
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.error("analyzeAPI failed", err);
+    return {
+      risk: 0,
+      severity: "low",
+      findings: ["Error contacting backend"],
+      engine: "client-fallback"
+    };
+  }
+}
