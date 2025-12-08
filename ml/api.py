@@ -69,7 +69,7 @@ RATE_LIMIT_WINDOW = 60.0        # seconds
 _rate_buckets: defaultdict[str, deque] = defaultdict(deque)
 EXEMPT_PATHS = (
     "/docs", "/openapi.json", "/web", "/app", "/favicon.ico", "/static", "/assets",
-    "/health", "/metrics"  # Add these for health checks and monitoring
+    "/health", "/metrics", "/"  # Add root path
 )
 
 def _is_exempt(path: str) -> bool:
@@ -279,11 +279,28 @@ def preprocess_none(pil_img: Image.Image) -> Image.Image:
     img = pil_img.convert("L")
     return _resize_if_large(img, 2000)
 
+def preprocess_screenshot(pil_img: Image.Image) -> Image.Image:
+    """Optimized for UI screenshots: preserve text while reducing noise."""
+    img = pil_img.convert("L")
+    img = _resize_if_large(img, 2000)
+    
+    # Denoise while keeping UI text sharp
+    img = img.filter(ImageFilter.MedianFilter(2))
+    img = ImageEnhance.Contrast(img).enhance(1.8)
+    img = ImageEnhance.Sharpness(img).enhance(2.0)
+    
+    # CLAHE-like adaptive histogram
+    arr = np.array(img)
+    thresh = int(np.percentile(arr, 15))  # Darker threshold for UI
+    bin_arr = (arr > thresh).astype(np.uint8) * 255
+    return Image.fromarray(bin_arr)
+
 PREPROCESS_FUNCS = {
     "none": preprocess_none,
     "mean": preprocess_mean_threshold,
     "adaptive": preprocess_adaptive,
     "invert": preprocess_invert,
+    "screenshot": preprocess_screenshot,
 }
 
 # ---------------------------
@@ -926,3 +943,34 @@ def main() -> None:
         logger.error("Failed to save model: %s", e)
 
     logger.info("Training complete")
+
+def extract_screenshot_features(pil_img: Image.Image) -> dict:
+    """Extract visual features from screenshot for phishing detection."""
+    try:
+        arr = np.array(pil_img.convert("RGB"))
+        h, w = arr.shape[:2]
+        
+        # Color uniformity (real apps have consistent colors, phishing often doesn't)
+        r, g, b = arr[:,:,0], arr[:,:,1], arr[:,:,2]
+        color_variance = float(np.var(r) + np.var(g) + np.var(b))
+        
+        # Edge density (phishing often has inconsistent borders/alignment)
+        from scipy import ndimage
+        edges = ndimage.sobel(np.mean(arr, axis=2))
+        edge_density = float(np.sum(edges > 10) / (h * w))
+        
+        # Text region density (legitimate apps have structured text areas)
+        from PIL import ImageStat
+        stat = ImageStat.Stat(pil_img.convert("L"))
+        text_density = float(stat.stddev[0] / (stat.mean[0] + 1e-6))
+        
+        return {
+            "color_variance": color_variance,
+            "edge_density": edge_density,
+            "text_density": text_density,
+            "aspect_ratio": float(w / h) if h > 0 else 1.0,
+            "image_size": w * h,
+        }
+    except Exception as e:
+        logger.debug("screenshot features failed: %s", e)
+        return {"color_variance": 0, "edge_density": 0, "text_density": 0, "aspect_ratio": 1.0, "image_size": 0}
