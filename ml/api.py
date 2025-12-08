@@ -824,7 +824,7 @@ async def analyze_text(request: TextAnalyzeRequest):
         s = score_url(u)  # This uses ML if available, else heuristic
         reasons = heuristics_for_url(u)
         
-        # Calculate ML confidence (same as heuristic score when ML is working)
+        # Calculate ML confidence
         ml_conf = s if MODEL_BUNDLE and "model" in MODEL_BUNDLE else None
         ml_risk_percent = int(round(s * 100)) if ml_conf is not None else None
         
@@ -837,11 +837,12 @@ async def analyze_text(request: TextAnalyzeRequest):
             "ml_risk_percent": ml_risk_percent,
         })
     
-    return {
-        "text": combined,
-        "urls": url_infos,
-        "word_boxes": []
-    }
+    # Return proper JSON response object
+    return AnalyzeResponse(
+        text=combined,
+        urls=[URLInfo(**info) for info in url_infos],
+        word_boxes=[]
+    )
 
 def main() -> None:
     """Train a new model on the ARFF features dataset and save to MODEL_PATH."""
