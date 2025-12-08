@@ -1,0 +1,17 @@
+app = "phishguard-academy"
+
+[build]
+  image = "phishguard:latest"
+
+[env]
+  API_KEY = "changeme"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8000
+  external_port = 80
+  
+  [[services.tcp_checks]]
+    grace_period = "5s"
+    interval = "10s"
+    timeout = "2s"
