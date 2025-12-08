@@ -14,6 +14,13 @@ import { AnimatePresence, motion } from "framer-motion";
 /* ---------- Types ---------- */
 type TabKey = "analysis" | "challenges" | "learn" | "analytics" | "glossary";
 
+// Add model metadata type
+type ModelMetadata = {
+  present: boolean;
+  feature_count?: number;
+  test_accuracy?: number;
+};
+
 type Finding = {
   type: string;
   label: string;
@@ -144,6 +151,25 @@ const LS_KEYS = {
   progress: "pg_progress_v1",
   events: "pg_events_v1",
 };
+
+// Add model metadata fetch
+let cachedModelMeta: ModelMetadata | null = null;
+
+async function fetchModelMetadata(): Promise<ModelMetadata> {
+  if (cachedModelMeta) return cachedModelMeta;
+  try {
+    const res = await fetch("/ocr_status");
+    if (res.ok) {
+      const data = await res.json();
+      cachedModelMeta = data.model || { present: false };
+      return cachedModelMeta;
+    }
+  } catch (err) {
+    console.debug("Failed to fetch model metadata:", err);
+  }
+  return { present: false };
+}
+
 function load<T>(k: string, def: T): T {
   try { const v = JSON.parse(typeof window !== "undefined" ? localStorage.getItem(k) : null || "null"); return (v ?? def) as T; } catch { return def; }
 }
@@ -225,37 +251,47 @@ async function analyzeAPI(payload: {
   file?: File | null;
 }) {
   try {
-    try { const res = await fetch("http://127.0.0.1:8000/analyze", {
-      method: "POST",
-      headers: payload.file
-        ? undefined
-        : { "Content-Type": "application/json" },
-      body: payload.file
-        ? (() => {
-            const fd = new FormData();
-            if (payload.text) fd.append("text", payload.text);
-            if (payload.url) fd.append("url", payload.url);
-            if (payload.file) fd.append("image", payload.file, payload.file.name);
-            return fd;
-          })()
-        : JSON.stringify({
-            text: payload.text ?? "",
-            url: payload.url ?? "",
-          }),
-    });
-
-    if (!res.ok) {
-      throw new Error("backend error");
+    // If file upload, use /analyze (expects multipart/form-data)
+    if (payload.file) {
+      const fd = new FormData();
+      fd.append("file", payload.file);
+      
+      const res = await fetch("/analyze", {
+        method: "POST",
+        body: fd,
+      });
+      
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`File analysis failed: ${err}`);
+      }
+      
+      return await res.json();
     }
-
-    return await res.json(); } catch (err) { console.error("Analyze API failed:", err); return { risk: 0, severity: "error", findings: ["Backend offline or misconfigured."], ocr_text: "", boxes: [] }; }
+    
+    // If text or URL only, use /analyze_text (expects JSON)
+    if (payload.text || payload.url) {
+      const res = await fetch("/analyze_text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: payload.text || "",
+          url: payload.url || "",
+        }),
+      });
+      
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Text analysis failed: ${err}`);
+      }
+      
+      return await res.json();
+    }
+    
+    throw new Error("No input provided");
   } catch (err) {
-    console.error("analyzeAPI failed, falling back to mockAnalyze", err);
-    return mockAnalyze({
-      text: payload.text ?? "",
-      url: payload.url ?? "",
-      file: payload.file ?? null,
-    });
+    console.error("analyzeAPI failed:", err);
+    throw err;
   }
 }
 
@@ -300,7 +336,16 @@ function AnalysisTab() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [safeMode, setSafeMode] = useState(true);
+  const [modelMeta, setModelMeta] = useState<ModelMetadata>({ present: false });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Fetch model metadata on mount
+  useEffect(() => {
+    (async () => {
+      const meta = await fetchModelMetadata();
+      setModelMeta(meta);
+    })();
+  }, []);
 
   const doAnalyze = async () => { setLoading(true); const r = await analyzeAPI({ text, url, file }); setResult(r); setLoading(false); };
 
@@ -328,6 +373,15 @@ function AnalysisTab() {
       <Card className="shadow-lg">
         <CardHeader><CardTitle><Upload size={18} /> Upload or Paste</CardTitle></CardHeader>
         <CardContent className="space-y-3">
+          {/* Model accuracy info banner */}
+          {modelMeta.present && modelMeta.test_accuracy != null && (
+            <div className="xs muted" style={{ padding: "8px", background: "#f3f4ff", borderRadius: "8px", borderLeft: "3px solid #6d7cff" }}>
+              <strong>Model test accuracy:</strong> {Math.round(modelMeta.test_accuracy * 100)}%
+              <br />
+              <span className="italic">Per-URL ML confidence shown below per prediction.</span>
+            </div>
+          )}
+
           <div>
             <Label htmlFor="text">Paste email text</Label>
             <Textarea id="text" placeholder="Paste suspicious email content" value={text} onChange={(e) => setText(e.target.value)} className="minh-120" />
@@ -376,21 +430,19 @@ function AnalysisTab() {
             <div className="space-y-4">
               <div className="row gap-3">
                 <RiskBadge score={result.risk} />
-<p className="xs muted">Heuristic Risk: {result.heuristic_risk}% ({result.heuristic_severity})</p> 
-<p className="xs muted">ML Risk: {result.ml_risk}% (confidence {result.ml_confidence})</p> 
-{result.ocr_text && <p className="xs muted">OCR: {result.ocr_text}</p>}
-    <div className="text-xs muted">ML Risk: {result.ml_risk}% (confidence {Math.round(result.ml_confidence * 100)}%)</div>
-                <Progress value={result.risk} />
               </div>
 
-              <div className="grid grid-2 gap-3">
-                {result.findings.map((f, i) => (
-                  <Alert key={i} variant={f.severity === "high" ? "destructive" : "default"}>
-                    <AlertTitle className="row gap-2">{f.severity === "high" ? <AlertTriangle size={16} /> : <Info size={16} />}{f.label}</AlertTitle>
-                    <AlertDescription className="text-sm">{f.detail}</AlertDescription>
-                  </Alert>
-                ))}
-              </div>
+              {result.findings?.length > 0 && (
+                <div className="space-y-2">
+                  <div className="bold text-sm">Findings:</div>
+                  {result.findings.map((f, i) => (
+                    <Alert key={i} variant={f.severity === "high" ? "destructive" : "default"}>
+                      <AlertTitle className="row gap-2">{f.severity === "high" ? <AlertTriangle size={16} /> : <Info size={16} />}{f.label}</AlertTitle>
+                      <AlertDescription className="text-sm">{f.detail}</AlertDescription>
+                    </Alert>
+                  ))}
+                </div>
+              )}
 
               <div className="grid grid-2 gap-3">
                 <Card>
@@ -401,7 +453,6 @@ function AnalysisTab() {
                         <div className="img-empty">No image</div>}
                     </div>
                     {!result?.boxes?.length && imgPreview && <p className="muted xs mt-2">Image shown. No suspicious text regions detected.</p>}
-    {result?.ocr_text && <div className="mt-2 text-xs muted">OCR extracted: {result.ocr_text}</div>}
                   </CardContent>
                 </Card>
                 <Card>
@@ -418,6 +469,37 @@ function AnalysisTab() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* URL analysis with ML confidence */}
+              {result.urls?.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Detected URLs</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {result.urls.map((u: any, i: number) => (
+                      <div key={i} className="row between xs gap-2" style={{ paddingBottom: "8px", borderBottom: "1px solid #e8ebff" }}>
+                        <div className="truncate" style={{ flex: 1 }}>{u.url}</div>
+                        <div className="row gap-2" style={{ flexShrink: 0 }}>
+                          <Badge variant={u.suspicious ? "destructive" : "default"}>
+                            Heuristic: {Math.round(u.score * 100)}%
+                          </Badge>
+                          {u.ml_confidence != null ? (
+                            <Badge variant="secondary" title={`Model confidence: ${formatMLConfidence(u.ml_confidence)}`}>
+                              ML: {formatMLConfidence(u.ml_confidence)}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" title="ML model unavailable">ML: —</Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <p className="xs muted mt-3">
+                      <strong>Heuristic</strong> = quick pattern matching (fast, offline). <strong>ML</strong> = model prediction with confidence.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {result.ocr_text && <div className="mt-2 text-xs muted">OCR extracted: {result.ocr_text}</div>}
             </div>
           )}
         </CardContent>

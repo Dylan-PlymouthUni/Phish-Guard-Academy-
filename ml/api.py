@@ -5,24 +5,34 @@ import os
 import re
 import json
 import time
-import socket
+import warnings
 import logging
 import base64
 import shutil
 import subprocess
+import socket
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional, Dict, Any, List, Tuple
+from collections import deque, defaultdict
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
 from urllib.parse import urlparse
 
 import joblib
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance, ImageOps
+from prometheus_client import Counter, Histogram, generate_latest  # pip install prometheus-client
+
+# Suppress PIL palette/transparency warning
+warnings.filterwarnings(
+    "ignore",
+    message="Palette images with Transparency expressed in bytes should be converted to RGBA images",
+    category=UserWarning,
+)
 
 # Try import pytesseract
 try:
@@ -33,21 +43,88 @@ except Exception:
     HAS_TESSERACT = False
 
 logger = logging.getLogger("phishguard")
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 
 app = FastAPI(title="PhishGuard OCR + ML + Heuristics API")
 
-# Serve static frontend
-app.mount("/web", StaticFiles(directory="web"), name="web")
+# --- Security settings ---
+API_KEY = os.getenv("API_KEY")  # set this in the environment to enforce auth
+RATE_LIMIT_MAX = 60             # requests
+RATE_LIMIT_WINDOW = 60.0        # seconds
+_rate_buckets: defaultdict[str, deque] = defaultdict(deque)
+EXEMPT_PATHS = (
+    "/docs", "/openapi.json", "/web", "/app", "/favicon.ico", "/static", "/assets"
+)
 
-# Allow local dev frontend
+def _is_exempt(path: str) -> bool:
+    return any(path.startswith(p) for p in EXEMPT_PATHS)
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data: blob:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+    )
+    return response
+
+@app.middleware("http")
+async def api_key_and_rate_limit(request: Request, call_next):
+    path = request.url.path
+    if not _is_exempt(path):
+        # API key check (skip if no API_KEY set)
+        if API_KEY:
+            provided = request.headers.get("x-api-key")
+            if provided != API_KEY:
+                return Response(status_code=401, content="Unauthorized")
+        # Rate limiting
+        ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        bucket = _rate_buckets[ip]
+        # drop old entries
+        while bucket and now - bucket[0] > RATE_LIMIT_WINDOW:
+            bucket.popleft()
+        if len(bucket) >= RATE_LIMIT_MAX:
+            return Response(status_code=429, content="Too Many Requests")
+        bucket.append(now)
+    return await call_next(request)
+
+# CORS fix: allow your actual frontend domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "https://jubilant-goldfish-g99j6jp4pw4hbpw-8000.app.github.dev",
+        "https://*.app.github.dev",  # Allow all Codespaces domains
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Ensure web directory exists then serve static frontend if available
+WEB_DIR = Path(__file__).resolve().parents[1] / "web"
+try:
+    os.makedirs(WEB_DIR, exist_ok=True)
+    logger.info("Ensured web directory exists at %s", str(WEB_DIR))
+except Exception as e:
+    logger.warning("Failed to ensure web directory: %s", e)
+
+if WEB_DIR.exists():
+    app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
+    logger.info("Mounted frontend at /web from %s", str(WEB_DIR))
+else:
+    logger.warning("Web directory not found at %s — frontend endpoints disabled", str(WEB_DIR))
 
 # Model loading (optional)
 MODEL_PATH = Path("ml/model/phish_rf_full.joblib")
@@ -61,7 +138,84 @@ if MODEL_PATH.exists():
 
 # Config
 MAX_UPLOAD_BYTES = 8_000_000  # 8 MB
-MIN_CONF_KEEP = 20.0  # keep words with conf >= this (when possible)
+MIN_CONF_KEEP = 20.0
+
+# ---------------------------
+# Image handling helpers
+# ---------------------------
+def _open_image_rgb_from_bytes(content: bytes) -> Image.Image:
+    """
+    Safely open uploaded image bytes and return an RGB Image.
+    Handles paletted images with transparency by compositing onto white background.
+    """
+    buf = io.BytesIO(content)
+    img = Image.open(buf)
+    # Handle paletted images with transparency
+    try:
+        if img.mode == "P" and "transparency" in img.info:
+            img = img.convert("RGBA")
+            bg = Image.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img, mask=img.split()[3])
+            return bg
+        if img.mode == "RGBA":
+            bg = Image.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img, mask=img.split()[3])
+            return bg
+    except Exception:
+        pass
+    return img.convert("RGB")
+
+# ---------------------------
+# Backwards-compatible helpers expected by tests
+# ---------------------------
+def preprocess_image_for_ocr(pil_img: Image.Image, max_dim: int = 1600) -> Image.Image:
+    """
+    Backwards-compatible wrapper used by tests.
+    Uses the 'mean' preprocessing pipeline as a reasonable default.
+    """
+    try:
+        w, h = pil_img.size
+        if max(w, h) > max_dim:
+            scale = max_dim / float(max(w, h))
+            pil_img = pil_img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+    except Exception:
+        pass
+    return preprocess_mean_threshold(pil_img)
+
+def extract_text_and_boxes(pil_img: Image.Image) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Backwards-compatible synchronous wrapper expected by tests.
+    If pytesseract is unavailable returns ("", []).
+    """
+    if not HAS_TESSERACT or pytesseract is None:
+        return "", []
+
+    try:
+        return asyncio.run(try_multiple_ocr(pil_img))
+    except Exception:
+        try:
+            pre = preprocess_image_for_ocr(pil_img)
+            data = pytesseract.image_to_data(pre, output_type=pytesseract.Output.DICT, config="--psm 6")
+            words = data.get("text", []) or []
+            text = " ".join([w for w in words if w and w.strip()])
+            boxes: List[Dict[str, Any]] = []
+            n = len(words)
+            for i in range(n):
+                w = (words[i] or "").strip()
+                if not w:
+                    continue
+                conf = _parse_conf(data.get("conf", [None]*n)[i]) if i < n else -1.0
+                try:
+                    left = int(data.get("left", [0]*n)[i])
+                    top = int(data.get("top", [0]*n)[i])
+                    width = int(data.get("width", [0]*n)[i])
+                    height = int(data.get("height", [0]*n)[i])
+                except Exception:
+                    left = top = width = height = 0
+                boxes.append({"word": w, "left": left, "top": top, "width": width, "height": height, "conf": conf})
+            return text, boxes
+        except Exception:
+            return "", []
 
 # ---------------------------
 # Preprocessing helpers
@@ -87,19 +241,15 @@ def preprocess_adaptive(pil_img: Image.Image) -> Image.Image:
     img = pil_img.convert("L")
     img = _resize_if_large(img, 2000)
     img = img.filter(ImageFilter.MedianFilter(3))
-    # simple adaptive: local mean using small boxes via PIL's point transform is heavy;
-    # approximate by using ImageOps.autocontrast then adaptive-like threshold via gaussian blur
     enhanced = ImageEnhance.Contrast(img).enhance(1.4)
     blurred = enhanced.filter(ImageFilter.GaussianBlur(radius=1))
     arr = np.array(blurred)
-    # compute local-ish threshold: mean of whole image as fallback
     mean = int(arr.mean())
     thresh = max(80, mean - 15)
     bin_arr = (arr > thresh).astype(np.uint8) * 255
     return Image.fromarray(bin_arr)
 
 def preprocess_invert(pil_img: Image.Image) -> Image.Image:
-    # Some screenshots have white-on-dark; invert then threshold
     img = pil_img.convert("L")
     img = _resize_if_large(img, 2000)
     img = ImageOps.invert(img)
@@ -112,6 +262,13 @@ def preprocess_invert(pil_img: Image.Image) -> Image.Image:
 def preprocess_none(pil_img: Image.Image) -> Image.Image:
     img = pil_img.convert("L")
     return _resize_if_large(img, 2000)
+
+PREPROCESS_FUNCS = {
+    "none": preprocess_none,
+    "mean": preprocess_mean_threshold,
+    "adaptive": preprocess_adaptive,
+    "invert": preprocess_invert,
+}
 
 # ---------------------------
 # OCR orchestration & aggregation
@@ -126,28 +283,17 @@ def _parse_conf(raw_conf: Any) -> float:
             return -1.0
 
 async def _run_tesseract(img: Image.Image, config: str) -> Dict[str, Any]:
-    # run in thread to avoid blocking
     return await asyncio.to_thread(pytesseract.image_to_data, img, pytesseract.Output.DICT, config)
 
 async def try_multiple_ocr(pil_img: Image.Image) -> Tuple[str, List[Dict[str, Any]]]:
-    """
-    Try multiple preprocessing + PSM combos and aggregate results.
-    Returns aggregated text and list of word boxes with best confidences seen.
-    """
     if not HAS_TESSERACT:
         return "", []
 
-    strategies = [
-        ("none", preprocess_none),
-        ("mean", preprocess_mean_threshold),
-        ("adaptive", preprocess_adaptive),
-        ("invert", preprocess_invert),
-    ]
-    # psm candidates helpful for screenshots/mixed content
+    strategies = [("none", preprocess_none), ("mean", preprocess_mean_threshold),
+                  ("adaptive", preprocess_adaptive), ("invert", preprocess_invert)]
     psm_list = ["--psm 6", "--psm 3", "--psm 11", "--psm 1"]
 
-    aggregated: Dict[str, Dict[str, Any]] = {}  # key -> best record
-    records_all: List[Tuple[str, Dict[str, Any]]] = []
+    aggregated: Dict[str, Dict[str, Any]] = {}
 
     for name, func in strategies:
         try:
@@ -157,7 +303,7 @@ async def try_multiple_ocr(pil_img: Image.Image) -> Tuple[str, List[Dict[str, An
             continue
 
         for psm in psm_list:
-            cfg = psm  # can be extended with OEM if desired
+            cfg = psm
             try:
                 data = await _run_tesseract(proc_img, cfg)
             except Exception as e:
@@ -179,13 +325,10 @@ async def try_multiple_ocr(pil_img: Image.Image) -> Tuple[str, List[Dict[str, An
 
                 key = f"{w.lower()}::{left}::{top}::{width}::{height}"
                 rec = {"word": w, "conf": conf, "left": left, "top": top, "width": width, "height": height}
-                records_all.append((name + "|" + cfg, rec))
-                # track best by confidence for identical bounding / text keys
                 prev = aggregated.get(key)
                 if prev is None or conf > prev["conf"]:
                     aggregated[key] = rec
 
-    # Build ordered text by sorting boxes top->left
     boxes = list(aggregated.values())
     boxes_sorted = sorted(boxes, key=lambda b: (b["top"], b["left"]))
     text_tokens = [b["word"] for b in boxes_sorted if b["word"]]
@@ -196,14 +339,14 @@ async def try_multiple_ocr(pil_img: Image.Image) -> Tuple[str, List[Dict[str, An
 # ---------------------------
 # URL extraction & scoring
 # ---------------------------
-# more tolerant URL/domain regex: capture scheme, www, or bare domain.tld/paths
 URL_RE = re.compile(
-    r"""(?xi)\b(                                   # capture whole
-        (?:https?://|http://|www\.)[^\s'")<>]+     # full URLs with scheme or www
-        |                                          
-        (?:[A-Za-z0-9\-]{1,63}\.)+[A-Za-z]{2,}(?:/[^\s'")<>]*)?  # bare domain.tld + optional path
-    )"""
-, re.VERBOSE)
+    r"""(?xi)\b(
+        (?:https?://|http://|www\.)[^\s'")<>]+
+        |
+        (?:[A-Za-z0-9\-]{1,63}\.)+[A-Za-z]{2,}(?:/[^\s'")<>]*)?
+    )""",
+    re.VERBOSE,
+)
 
 def find_urls(text: str) -> List[str]:
     if not text:
@@ -211,10 +354,8 @@ def find_urls(text: str) -> List[str]:
     matches = []
     for m in URL_RE.finditer(text):
         u = m.group(0).strip()
-        # ignore very short dots like "e.g." by requiring a TLD-like pattern
         if re.match(r"^[A-Za-z0-9\-]+\.[A-Za-z]{2,}", u) or u.lower().startswith(("http", "www")):
             matches.append(u)
-    # dedupe preserving order
     seen = set()
     out = []
     for u in matches:
@@ -223,31 +364,81 @@ def find_urls(text: str) -> List[str]:
             out.append(u)
     return out
 
-SUSPICIOUS_TLDS = {"zip", "review", "top", "men", "work"}  # example suspect tlds
+SUSPICIOUS_TLDS = {"zip", "review", "top", "men", "work"}
+
+def heuristics_for_url(u: str) -> List[str]:
+    reasons: List[str] = []
+    raw = u.strip().rstrip('.,;:)\'"')
+    if not raw.lower().startswith("https"):
+        reasons.append("no_https")
+    parsed = urlparse(raw if raw.startswith("http") else ("http://" + raw))
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+    if host.count("-") > 2:
+        reasons.append("many_hyphens")
+    if len(path) > 60:
+        reasons.append("long_path")
+    if any(tok.isdigit() for tok in host.split(".")):
+        reasons.append("ip_like_host")
+    if re.search(r"(login|verify|secure|account|update|confirm|bank|paypal|free|urgent|reward)", u, re.I):
+        reasons.append("suspicious_tokens")
+    tld = host.split(".")[-1] if host else ""
+    if tld in SUSPICIOUS_TLDS:
+        reasons.append("suspicious_tld")
+    return reasons
+
+def extract_url_features(url: str) -> dict:
+    """Extract comprehensive features from URL for ML model prediction.
+    
+    Must match the features in the training dataset:
+    - url_length
+    - domain_length
+    - subdomain_count
+    - has_https
+    - has_suspicious_tokens
+    - special_char_count
+    - digit_count
+    - path_length
+    """
+    u = url.strip().rstrip('.,;:)\'"')
+    parsed = urlparse(u if u.startswith("http") else ("http://" + u))
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+    
+    return {
+        "url_length": len(u),
+        "domain_length": len(host),
+        "subdomain_count": host.count(".") - 1 if host else 0,
+        "has_https": 1 if u.lower().startswith("https") else 0,
+        "has_suspicious_tokens": 1 if re.search(r"(login|verify|secure|account|update|confirm|bank|paypal|free|urgent|reward)", u, re.I) else 0,
+        "special_char_count": u.count("-") + u.count("_"),
+        "digit_count": sum(c.isdigit() for c in u),
+        "path_length": len(path),
+    }
 
 def score_url(url: str) -> float:
-    """
-    Heuristic scoring in [0,1]. If model present, try model first.
-    """
     if MODEL_BUNDLE and "model" in MODEL_BUNDLE:
         try:
-            featurize = MODEL_BUNDLE.get("featurize_fn", lambda u: [0])
-            features = featurize(url)
+            feature_names = MODEL_BUNDLE.get("feature_names", [])
+            features_dict = extract_url_features(url)
+            
+            # Create DataFrame with features in correct order
+            import pandas as pd
+            features_df = pd.DataFrame([{name: features_dict.get(name, 0) for name in feature_names}])
+            
             model = MODEL_BUNDLE["model"]
-            prob = float(model.predict_proba([features])[0, 1])
+            prob = float(model.predict_proba(features_df)[0, 1])
             return max(0.0, min(1.0, prob))
         except Exception as e:
             logger.debug("model scoring failed: %s", e)
-
-    u = url.strip()
-    # normalize remove trailing punctuation
-    u = u.rstrip('.,;:)\'"')
+    
+    # Fallback heuristic scoring
+    u = url.strip().rstrip('.,;:)\'"')
     parsed = urlparse(u if u.startswith("http") else ("http://" + u))
     host = (parsed.hostname or "").lower()
     path = parsed.path or ""
     score = 0.0
 
-    # short heuristics
     if not u.lower().startswith("https"):
         score += 0.15
     if host.count("-") > 2 or host.count(".") > 3:
@@ -258,7 +449,6 @@ def score_url(url: str) -> float:
         score += 0.15
     if re.search(r"(login|verify|secure|account|update|confirm|bank|paypal|free|urgent|reward)", u, re.I):
         score += 0.3
-    # suspicious tld
     tld = host.split(".")[-1] if host else ""
     if tld in SUSPICIOUS_TLDS:
         score += 0.2
@@ -288,6 +478,9 @@ class URLInfo(BaseModel):
     url: str
     score: float
     suspicious: bool
+    reasons: List[str] = []
+    ml_confidence: Optional[float] = None
+    ml_risk_percent: Optional[int] = None
 
 class AnalyzeResponse(BaseModel):
     text: str
@@ -295,11 +488,54 @@ class AnalyzeResponse(BaseModel):
     word_boxes: List[WordBox]
 
 # ---------------------------
+# Metrics
+# ---------------------------
+REQUEST_COUNT = Counter('http_requests_total', 'Total requests', ['method', 'endpoint', 'status'])
+REQUEST_LATENCY = Histogram('http_request_duration_seconds', 'Request latency', ['method', 'endpoint'])
+ML_PREDICTIONS = Counter('ml_predictions_total', 'ML predictions', ['prediction'])
+
+@app.middleware("http")
+async def observability_middleware(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    latency = time.time() - start
+    
+    REQUEST_COUNT.labels(request.method, request.url.path, response.status_code).inc()
+    REQUEST_LATENCY.labels(request.method, request.url.path).observe(latency)
+    
+    return response
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "model_loaded": MODEL_BUNDLE is not None}
+
+@app.get("/metrics")
+async def metrics():
+    return Response(generate_latest(), media_type="text/plain")
+
+# ---------------------------
 # Endpoints
 # ---------------------------
+# Mount the built React app (after existing /web mount)
+DIST_DIR = Path(__file__).resolve().parents[1] / "phish-guard-academy" / "dist"
+if DIST_DIR.exists():
+    app.mount("/app", StaticFiles(directory=str(DIST_DIR), html=True), name="app")
+    logger.info("Mounted React app at /app from %s", str(DIST_DIR))
+else:
+    logger.warning("React dist not found at %s — run 'npm run build' in phish-guard-academy/", str(DIST_DIR))
+
+@app.get("/")
+async def root():
+    """Redirect root to the mounted React app if it exists, otherwise to the OpenAPI docs."""
+    if DIST_DIR.exists():
+        return RedirectResponse(url="/app/", status_code=301)  # <-- add trailing slash + permanent redirect
+    web_index = WEB_DIR / "frontend.html"
+    if web_index.exists():
+        return RedirectResponse(url="/web/frontend.html", status_code=301)
+    return RedirectResponse(url="/docs", status_code=301)
+
 @app.get("/ocr_status")
 async def ocr_status():
-    """Return pytesseract import and tesseract binary status."""
     tesseract_path = shutil.which("tesseract")
     tesseract_version = None
     if tesseract_path:
@@ -308,29 +544,34 @@ async def ocr_status():
             tesseract_version = out.stdout.splitlines()[0] if out.returncode == 0 else out.stderr
         except Exception as e:
             tesseract_version = str(e)
+
+    model_info: Dict[str, Any] = {"present": False}
+    if MODEL_BUNDLE:
+        model_info["present"] = True
+        model_info["feature_count"] = len(MODEL_BUNDLE.get("feature_names", [])) if isinstance(MODEL_BUNDLE, dict) else 0
+        if isinstance(MODEL_BUNDLE, dict) and "test_accuracy" in MODEL_BUNDLE:
+            model_info["test_accuracy"] = float(MODEL_BUNDLE["test_accuracy"])
+
     return JSONResponse({
         "pytesseract_imported": bool(HAS_TESSERACT),
         "tesseract_binary": tesseract_path,
         "tesseract_version": tesseract_version,
+        "model": model_info,
         "note": "Install system 'tesseract-ocr' package if binary missing."
     })
 
 @app.post("/analyze_image", response_model=AnalyzeResponse)
 async def analyze_image(file: UploadFile = File(...)):
-    """Analyze uploaded image and return text, urls and boxes."""
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty upload")
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Uploaded file too large")
-    try:
-        pil = Image.open(io.BytesIO(content)).convert("RGB")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image")
+    
+    pil = _open_image_rgb_from_bytes(content)
 
     text, boxes = await try_multiple_ocr(pil)
 
-    # If text empty, try a fallback invert or increased contrast run synchronously
     if not text.strip():
         try:
             fallback = preprocess_invert(pil)
@@ -339,7 +580,6 @@ async def analyze_image(file: UploadFile = File(...)):
             txt = " ".join([w for w in words if w and w.strip()])
             if txt.strip():
                 text = txt
-                # reconstruct boxes simply from data
                 boxes = []
                 n = len(words)
                 for i in range(n):
@@ -356,13 +596,33 @@ async def analyze_image(file: UploadFile = File(...)):
             pass
 
     urls = find_urls(text)
-    url_infos = []
+    url_infos: List[Dict[str, Any]] = []
     for u in urls:
         s = score_url(u)
-        url_infos.append({"url": u, "score": s, "suspicious": s > 0.5})
+        reasons = heuristics_for_url(u)
+        ml_conf = None
+        ml_risk_percent = None
+        if MODEL_BUNDLE:
+            try:
+                scorer = MODEL_BUNDLE.get("ml_score") or MODEL_BUNDLE.get("score_fn")
+                if callable(scorer):
+                    mr = scorer(u)
+                    if isinstance(mr, dict):
+                        ml_conf = float(mr.get("confidence")) if mr.get("confidence") is not None else None
+                        ml_risk_percent = int(mr.get("risk_percent") or mr.get("risk") or (None if ml_conf is None else round(ml_conf*100)))
+            except Exception as e:
+                logger.debug("Model bundle ml_score failed: %s", e)
 
-    # sanitize boxes to pydantic-friendly types and ensure conf present
-    out_boxes = []
+        url_infos.append({
+            "url": u,
+            "score": s,
+            "suspicious": s > 0.5,
+            "reasons": reasons,
+            "ml_confidence": ml_conf,
+            "ml_risk_percent": ml_risk_percent,
+        })
+
+    out_boxes: List[Dict[str, Any]] = []
     for b in boxes:
         try:
             out_boxes.append({
@@ -378,18 +638,20 @@ async def analyze_image(file: UploadFile = File(...)):
 
     return {"text": text, "urls": url_infos, "word_boxes": out_boxes}
 
+@app.post("/analyze", response_model=AnalyzeResponse)
+async def analyze(file: UploadFile = File(...)):
+    """Alias for /analyze_image for frontend compatibility."""
+    return await analyze_image(file)
+
 @app.post("/annotated_image")
 async def annotated_image(file: UploadFile = File(...)):
-    """Return an annotated PNG where suspicious words/URLs are boxed."""
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty upload")
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Uploaded file too large")
-    try:
-        pil = Image.open(io.BytesIO(content)).convert("RGB")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image")
+    
+    pil = _open_image_rgb_from_bytes(content)
 
     text, boxes = await try_multiple_ocr(pil)
     urls = find_urls(text)
@@ -412,16 +674,29 @@ async def annotated_image(file: UploadFile = File(...)):
     buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
 
-@app.post("/debug_ocr")
-async def debug_ocr(file: UploadFile = File(...)):
-    """Return base64 preprocessed image and detailed OCR runs for debugging."""
+@app.post("/preprocessed_image")
+async def preprocessed_image(file: UploadFile = File(...), strategy: str = Query("mean", description="one of: none, mean, adaptive, invert")):
+    if strategy not in PREPROCESS_FUNCS:
+        raise HTTPException(status_code=400, detail=f"Unknown strategy {strategy}")
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty upload")
-    try:
-        pil = Image.open(io.BytesIO(content)).convert("RGB")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image")
+    
+    pil = _open_image_rgb_from_bytes(content)
+    func = PREPROCESS_FUNCS[strategy]
+    pre = await asyncio.to_thread(func, pil)
+    buf = io.BytesIO()
+    pre.convert("RGB").save(buf, format="PNG")
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png")
+
+@app.post("/debug_ocr")
+async def debug_ocr(file: UploadFile = File(...)):
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty upload")
+    
+    pil = _open_image_rgb_from_bytes(content)
 
     orig_preview = pil.copy()
     orig_preview.thumbnail((1200, 1200))
@@ -429,13 +704,7 @@ async def debug_ocr(file: UploadFile = File(...)):
     debug_runs: Dict[str, Any] = {}
     main_text = ""
     if HAS_TESSERACT:
-        strategies = {
-            "none": preprocess_none,
-            "mean": preprocess_mean_threshold,
-            "adaptive": preprocess_adaptive,
-            "invert": preprocess_invert,
-        }
-        for name, fn in strategies.items():
+        for name, fn in PREPROCESS_FUNCS.items():
             try:
                 pre = await asyncio.to_thread(fn, pil)
                 pre_b64 = image_to_base64_png(pre)
@@ -476,7 +745,7 @@ FEEDBACK_FILE = FEEDBACK_DIR / "feedback.jsonl"
 
 class FeedbackItem(BaseModel):
     url: str
-    label: str  # "phishing", "benign", etc.
+    label: str
     notes: Optional[str] = None
     timestamp: Optional[float] = None
 
@@ -504,3 +773,129 @@ async def enrich_url(url: str):
     except Exception as e:
         resp["ip_error"] = str(e)
     return JSONResponse(resp)
+
+class TextAnalyzeRequest(BaseModel):
+    text: Optional[str] = None
+    url: Optional[str] = None
+
+@app.post("/analyze_text")
+async def analyze_text(request: TextAnalyzeRequest):
+    """Analyze text or URL without requiring file upload."""
+    text = request.text or ""
+    url = request.url or ""
+    
+    if not text and not url:
+        raise HTTPException(status_code=400, detail="Provide text or url")
+    
+    # Combine text and URL for analysis
+    combined = f"{text}\n{url}".strip()
+    
+    # Find URLs in the combined text
+    urls = find_urls(combined)
+    url_infos: List[Dict[str, Any]] = []
+    
+    for u in urls:
+        s = score_url(u)  # This uses ML if available, else heuristic
+        reasons = heuristics_for_url(u)
+        
+        # Calculate ML confidence (same as heuristic score when ML is working)
+        ml_conf = s if MODEL_BUNDLE and "model" in MODEL_BUNDLE else None
+        ml_risk_percent = int(round(s * 100)) if ml_conf is not None else None
+        
+        url_infos.append({
+            "url": u,
+            "score": s,
+            "suspicious": s > 0.5,
+            "reasons": reasons,
+            "ml_confidence": ml_conf,
+            "ml_risk_percent": ml_risk_percent,
+        })
+    
+    return {
+        "text": combined,
+        "urls": url_infos,
+        "word_boxes": []
+    }
+
+def main() -> None:
+    """Train a new model on the ARFF features dataset and save to MODEL_PATH."""
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import LabelEncoder
+    from sklearn.metrics import classification_report, accuracy_score
+
+    # Load ARFF features (assumes running in repo root where data/ is available)
+    try:
+        from scipy.io import arff
+        import pandas as pd
+    except Exception as e:
+        logger.error("Failed to import ARFF loading dependencies: %s", e)
+        return
+
+    logger.info("Loading ARFF data...")
+    try:
+        data, meta = arff.loadarff("data/combined_features.arff")
+        df = pd.DataFrame(data)
+    except Exception as e:
+        logger.error("Failed to load ARFF data: %s", e)
+        return
+
+    logger.info("ARFF data loaded, sample rows:")
+    logger.info("%s", df.sample(min(len(df), 10)).to_string(index=False))
+
+    # Encode string labels as integers
+    label_col = "label"
+    if df[label_col].dtype == "object":
+        le = LabelEncoder()
+        df[label_col] = le.fit_transform(df[label_col])
+        logger.info("Encoded labels: %s", dict(enumerate(le.classes_)))
+
+    # Split into train/test sets
+    try:
+        train_df, test_df = train_test_split(df, test_size=0.2, random_state=42, stratify=df[label_col])
+    except Exception as e:
+        logger.error("Failed to split data into train/test sets: %s", e)
+        return
+
+    logger.info("Train/test split: %d train, %d test", len(train_df), len(test_df))
+
+    # Separate features and labels
+    feature_cols = [c for c in df.columns if c != label_col]
+    X_train, y_train = train_df[feature_cols], train_df[label_col]
+    X_test, y_test = test_df[feature_cols], test_df[label_col]
+
+    # Train a RandomForest model
+    try:
+        clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+        clf.fit(X_train, y_train)
+        logger.info("RandomForest model trained")
+    except Exception as e:
+        logger.error("Failed to train model: %s", e)
+        return
+
+    # Evaluate on test set
+    logger.info("Evaluating model on test set...")
+    try:
+        y_pred = clf.predict(X_test)
+        report = classification_report(y_test, y_pred, output_dict=True)
+        logger.info("Classification report:\n%s", report)
+        test_acc = accuracy_score(y_test, y_pred)
+        logger.info("Test accuracy: %.4f", test_acc)
+    except Exception as e:
+        logger.error("Failed to evaluate model: %s", e)
+        return
+
+    # Save the trained model and feature metadata
+    try:
+        model_bundle = {
+            "model": clf,
+            "feature_names": feature_cols,
+            "target_name": label_col,
+            "test_accuracy": test_acc,
+        }
+        joblib.dump(model_bundle, MODEL_PATH)
+        logger.info("Model saved to %s", MODEL_PATH)
+    except Exception as e:
+        logger.error("Failed to save model: %s", e)
+
+    logger.info("Training complete")
