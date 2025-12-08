@@ -974,3 +974,73 @@ def extract_screenshot_features(pil_img: Image.Image) -> dict:
     except Exception as e:
         logger.debug("screenshot features failed: %s", e)
         return {"color_variance": 0, "edge_density": 0, "text_density": 0, "aspect_ratio": 1.0, "image_size": 0}
+
+# Load screenshot model at startup
+SCREENSHOT_MODEL_PATH = Path("ml/model/screenshot_phish_rf.joblib")
+SCREENSHOT_MODEL_BUNDLE: Optional[Dict[str, Any]] = None
+if SCREENSHOT_MODEL_PATH.exists():
+    try:
+        SCREENSHOT_MODEL_BUNDLE = joblib.load(SCREENSHOT_MODEL_PATH)
+        logger.info(f"Loaded screenshot model from {SCREENSHOT_MODEL_PATH}")
+    except Exception as e:
+        logger.warning(f"Failed to load screenshot model: {e}")
+
+@app.post("/analyze_screenshot")
+async def analyze_screenshot(file: UploadFile = File(...)):
+    """Analyze screenshot for phishing/scam indicators."""
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty upload")
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+    
+    pil = _open_image_rgb_from_bytes(content)
+    
+    # Extract text (URLs, suspicious phrases)
+    text, boxes = await try_multiple_ocr(pil)
+    urls = find_urls(text)
+    
+    # Extract visual features
+    visual_features = extract_screenshot_features(pil)
+    
+    # Score using screenshot model if available
+    screenshot_risk = 0.0
+    if SCREENSHOT_MODEL_BUNDLE and "model" in SCREENSHOT_MODEL_BUNDLE:
+        try:
+            import pandas as pd
+            feature_names = SCREENSHOT_MODEL_BUNDLE.get("feature_names", [])
+            X = pd.DataFrame([{name: visual_features.get(name, 0) for name in feature_names}])
+            model = SCREENSHOT_MODEL_BUNDLE["model"]
+            probs = model.predict_proba(X)[0]
+            screenshot_risk = float(probs[1]) if len(probs) > 1 else 0.0
+        except Exception as e:
+            logger.debug("screenshot model scoring failed: %s", e)
+    
+    # Analyze URLs
+    url_infos = []
+    for u in urls:
+        s = score_url(u)
+        reasons = heuristics_for_url(u)
+        url_infos.append({
+            "url": u,
+            "score": s,
+            "suspicious": s > 0.5,
+            "reasons": reasons,
+            "ml_risk_percent": int(round(s * 100)),
+        })
+    
+    # Check for phishing phrases
+    suspicious_phrases = [
+        "verify", "confirm", "update", "urgent", "immediate", "click here",
+        "account locked", "suspended", "unusual activity", "re-enter"
+    ]
+    detected_phrases = [p for p in suspicious_phrases if p.lower() in text.lower()]
+    
+    return JSONResponse({
+        "ocr_text": text,
+        "urls": url_infos,
+        "detected_phrases": detected_phrases,
+        "visual_features": visual_features,
+        "screenshot_risk_percent": int(round(screenshot_risk * 100)),
+        "overall_risk_percent": int(round(max(max([u["score"] for u in url_infos], default=0.0), screenshot_risk) * 100)),
+    })
