@@ -681,10 +681,10 @@ async def analyze_image(file: UploadFile = File(...)):
 
     return {"text": text, "urls": url_infos, "word_boxes": out_boxes}
 
-@app.post("/analyze", response_model=AnalyzeResponse)
+@app.post("/analyze")
 async def analyze(file: UploadFile = File(...)):
-    """Alias for /analyze_image for frontend compatibility."""
-    return await analyze_image(file)
+    """Analyze image for phishing using /analyze_screenshot (visual ML + OCR)."""
+    return await analyze_screenshot(file)
 
 @app.post("/annotated_image")
 async def annotated_image(file: UploadFile = File(...)):
@@ -985,9 +985,12 @@ if SCREENSHOT_MODEL_PATH.exists():
     except Exception as e:
         logger.warning(f"Failed to load screenshot model: {e}")
 
+
+
+
 @app.post("/analyze_screenshot")
 async def analyze_screenshot(file: UploadFile = File(...)):
-    """Analyze screenshot for phishing/scam indicators."""
+    """Analyze screenshot for phishing/scam indicators using combined signals."""
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty upload")
@@ -1000,23 +1003,76 @@ async def analyze_screenshot(file: UploadFile = File(...)):
     text, boxes = await try_multiple_ocr(pil)
     urls = find_urls(text)
     
-    # Extract visual features
-    visual_features = extract_screenshot_features(pil)
+    # 1. Check for suspicious URLs
+    max_url_risk = 0.0
+    for u in urls:
+        s = score_url(u)
+        max_url_risk = max(max_url_risk, s)
     
-    # Score using screenshot model if available
-    screenshot_risk = 0.0
+    # 2. Check for suspicious phrases
+    suspicious_phrases = [
+        "verify", "confirm", "update", "urgent", "immediate", "click here",
+        "account locked", "suspended", "unusual activity", "re-enter",
+        "action required", "click now", "expire", "limit exceeded"
+    ]
+    phrase_risk = 0.0
+    detected_phrases = []
+    for p in suspicious_phrases:
+        if p.lower() in text.lower():
+            detected_phrases.append(p)
+            phrase_risk = max(phrase_risk, 0.4)
+    if len(detected_phrases) > 2:
+        phrase_risk = 0.7
+    
+    # 3. Extract visual features
+    visual_features = extract_screenshot_features(pil)
+    visual_risk = 0.0
+    
+    if visual_features.get("color_variance", 0) > 5000:
+        visual_risk += 0.3
+    if visual_features.get("edge_density", 0) > 0.05:
+        visual_risk += 0.2
+    if visual_features.get("text_density", 0) > 2.0:
+        visual_risk += 0.25
+    
+    # 4. Use ML model (most important signal)
+    model_risk = 0.0
     if SCREENSHOT_MODEL_BUNDLE and "model" in SCREENSHOT_MODEL_BUNDLE:
         try:
             import pandas as pd
             feature_names = SCREENSHOT_MODEL_BUNDLE.get("feature_names", [])
-            X = pd.DataFrame([{name: visual_features.get(name, 0) for name in feature_names}])
-            model = SCREENSHOT_MODEL_BUNDLE["model"]
-            probs = model.predict_proba(X)[0]
-            screenshot_risk = float(probs[1]) if len(probs) > 1 else 0.0
+            # Create dict with ONLY the features the model expects
+            features_dict = {}
+            for fname in feature_names:
+                if fname != "label":
+                    features_dict[fname] = visual_features.get(fname, 0)
+            
+            if features_dict:
+                X = pd.DataFrame([features_dict])
+                model = SCREENSHOT_MODEL_BUNDLE["model"]
+                probs = model.predict_proba(X)[0]
+                # probs[0] = legitimate, probs[1] = phishing
+                model_risk = float(probs[1]) if len(probs) > 1 else 0.0
+                logger.info("Screenshot model prediction: phishing_prob=%.2f, features=%s", model_risk, features_dict)
         except Exception as e:
-            logger.debug("screenshot model scoring failed: %s", e)
+            logger.error("screenshot model scoring failed: %s", e)
+            import traceback
+            logger.error(traceback.format_exc())
     
-    # Analyze URLs
+    # Combine signals (visual ML model is strongest signal)
+    overall_risk = max(
+        max_url_risk * 0.3,      # URLs (30%)
+        phrase_risk * 0.2,       # Phrases (20%)
+        model_risk * 0.5         # Visual ML (50% - strongest)
+    )
+    
+    # Compound signals more aggressively
+    if model_risk > 0.5:
+        overall_risk = min(0.99, overall_risk + 0.15)
+    if max_url_risk > 0.5:
+        overall_risk = min(0.99, overall_risk + 0.15)
+    
+    # Build URL infos
     url_infos = []
     for u in urls:
         s = score_url(u)
@@ -1029,18 +1085,15 @@ async def analyze_screenshot(file: UploadFile = File(...)):
             "ml_risk_percent": int(round(s * 100)),
         })
     
-    # Check for phishing phrases
-    suspicious_phrases = [
-        "verify", "confirm", "update", "urgent", "immediate", "click here",
-        "account locked", "suspended", "unusual activity", "re-enter"
-    ]
-    detected_phrases = [p for p in suspicious_phrases if p.lower() in text.lower()]
-    
     return JSONResponse({
         "ocr_text": text,
         "urls": url_infos,
         "detected_phrases": detected_phrases,
         "visual_features": visual_features,
-        "screenshot_risk_percent": int(round(screenshot_risk * 100)),
-        "overall_risk_percent": int(round(max(max([u["score"] for u in url_infos], default=0.0), screenshot_risk) * 100)),
+        "url_risk_percent": int(round(max_url_risk * 100)),
+        "phrase_risk_percent": int(round(phrase_risk * 100)),
+        "model_risk_percent": int(round(model_risk * 100)),
+        "visual_risk_percent": int(round(visual_risk * 100)),
+        "overall_risk_percent": int(round(overall_risk * 100)),
     })
+
