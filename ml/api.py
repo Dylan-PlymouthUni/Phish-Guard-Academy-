@@ -27,6 +27,22 @@ from pydantic import BaseModel
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance, ImageOps
 from prometheus_client import Counter, Histogram, generate_latest  # pip install prometheus-client
 
+import structlog
+
+# Configure structured logging
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(),
+    cache_logger_on_first_use=False,
+)
+
 # Suppress PIL palette/transparency warning
 warnings.filterwarnings(
     "ignore",
@@ -42,8 +58,7 @@ except Exception:
     pytesseract = None
     HAS_TESSERACT = False
 
-logger = logging.getLogger("phishguard")
-logging.basicConfig(level=logging.WARNING)
+logger = structlog.get_logger("phishguard")
 
 app = FastAPI(title="PhishGuard OCR + ML + Heuristics API")
 
@@ -53,7 +68,8 @@ RATE_LIMIT_MAX = 60             # requests
 RATE_LIMIT_WINDOW = 60.0        # seconds
 _rate_buckets: defaultdict[str, deque] = defaultdict(deque)
 EXEMPT_PATHS = (
-    "/docs", "/openapi.json", "/web", "/app", "/favicon.ico", "/static", "/assets"
+    "/docs", "/openapi.json", "/web", "/app", "/favicon.ico", "/static", "/assets",
+    "/health", "/metrics"  # Add these for health checks and monitoring
 )
 
 def _is_exempt(path: str) -> bool:
@@ -502,6 +518,16 @@ async def observability_middleware(request: Request, call_next):
     
     REQUEST_COUNT.labels(request.method, request.url.path, response.status_code).inc()
     REQUEST_LATENCY.labels(request.method, request.url.path).observe(latency)
+    
+    # Structured logging
+    logger.info(
+        "http_request",
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        latency_seconds=round(latency, 3),
+        client_ip=request.client.host if request.client else "unknown"
+    )
     
     return response
 
