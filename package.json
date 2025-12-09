@@ -1,6 +1,7 @@
 {
   "dependencies": {
-    "framer-motion": "^12.23.24"
+    "framer-motion": "^12.23.24",
+    "react-router-dom": "^7.10.1"
   },
   "devDependencies": {
     "arff": "^0.1.1"

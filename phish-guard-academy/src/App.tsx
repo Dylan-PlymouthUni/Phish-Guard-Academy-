@@ -1,20 +1,20 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Analyze from './pages/Analyze';
-import Challenges from './pages/Challenges';
-import Learning from './pages/Learning';
-import Analytics from './pages/Analytics';
+import React from 'react'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import Analyze from './pages/Analyze'
+import Challenges from './pages/Challenges'
+import Learn from './pages/Learn'
+import Settings from './pages/Settings'
 
-function App() {
+export default function App() {
   return (
-    <BrowserRouter>
+    <Router basename="/app/">
       <Routes>
         <Route path="/" element={<Analyze />} />
+        <Route path="/analyze" element={<Analyze />} />
         <Route path="/challenges" element={<Challenges />} />
-        <Route path="/learning" element={<Learning />} />
-        <Route path="/analytics" element={<Analytics />} />
+        <Route path="/learning" element={<Learn />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
-    </BrowserRouter>
-  );
+    </Router>
+  )
 }
-
-export default App;
