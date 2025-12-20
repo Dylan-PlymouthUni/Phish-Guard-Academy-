@@ -95,7 +95,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
             <div>
               <h3 className="text-white font-bold mb-3">PhishGuard</h3>
-              <p className="text-sm text-slate-400">AI-powered phishing detection and security awareness</p>
+              <p className="text-sm text-slate-400">Smart phishing detection and security awareness</p>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-3">Product</h4>

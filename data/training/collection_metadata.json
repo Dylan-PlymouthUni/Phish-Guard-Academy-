@@ -1,0 +1,17 @@
+{
+  "collection_date": "2025-12-10T04:12:48.560611",
+  "total_phishing": 1775,
+  "total_legitimate": 84,
+  "total_samples": 1859,
+  "sources": [
+    "PhishTank",
+    "OpenPhish",
+    "URLhaus",
+    "Tranco"
+  ],
+  "files": {
+    "phishing": "data/training/phishing_urls.txt",
+    "legitimate": "data/training/legitimate_urls.txt",
+    "combined_csv": "data/training/url_dataset.csv"
+  }
+}

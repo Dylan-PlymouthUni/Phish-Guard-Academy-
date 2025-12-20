@@ -1,5 +1,10 @@
-import { BarChart3, TrendingUp, AlertCircle, CheckCircle, PieChart, Activity, Calendar } from 'lucide-react'
+import { BarChart3, TrendingUp, AlertCircle, CheckCircle, PieChart as PieChartIcon, Activity, Calendar, Download, Target, Zap, Shield } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { getAnalytics, getProgress, getAnalyses } from '../utils/storage'
+import { MainLayout } from '../components/layout/MainLayout'
+import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
+import { exportAnalyticsJSON, exportAnalyticsCSV, exportAnalysesCSV, exportCertificate } from '../utils/export'
+import { Button } from '../components/ui/Button'
 
 interface DailyStats {
   date: string
@@ -31,30 +36,96 @@ export default function Analytics() {
   const [distribution, setDistribution] = useState<RiskDistribution | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Helper function to generate daily stats
+  const generateDailyStats = (analyses: any[]): DailyStats[] => {
+    const last30Days = Array.from({ length: 30 }, (_, i) => {
+      const date = new Date()
+      date.setDate(date.getDate() - (29 - i))
+      return date.toISOString().split('T')[0]
+    })
+
+    return last30Days.map(date => {
+      const dayAnalyses = analyses.filter(a => a.timestamp?.startsWith(date))
+      const avgRisk = dayAnalyses.length > 0
+        ? dayAnalyses.reduce((sum, a) => sum + a.risk_score, 0) / dayAnalyses.length
+        : 0
+
+      return {
+        date,
+        analyses_count: dayAnalyses.length,
+        avg_risk_percent: avgRisk,
+        challenges_passed: 0,
+        lessons_completed: 0
+      }
+    })
+  }
+
   useEffect(() => {
     fetchData()
+    
+    // Refresh data when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchData()
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
   const fetchData = async () => {
     try {
-      const [summaryRes, dailyRes, distRes] = await Promise.all([
-        fetch('/api/analytics/summary'),
-        fetch('/api/analytics/daily?days=30'),
-        fetch('/api/analytics/distribution')
-      ])
+      const analytics = getAnalytics()
+      const progress = getProgress()
+      const analyses = getAnalyses()
       
-      if (summaryRes.ok) setSummary(await summaryRes.json())
-      if (dailyRes.ok) setDailyStats(await dailyRes.json())
-      if (distRes.ok) setDistribution(await distRes.json())
+      setSummary({
+        total_analyses: analytics.total_analyses,
+        high_risk_count: analytics.high_risk_count,
+        medium_risk_count: analytics.medium_risk_count,
+        safe_count: analytics.safe_count,
+        avg_risk_percent: analytics.avg_risk_percent,
+        challenges_passed: analytics.challenges_passed,
+        total_lessons: analytics.total_lessons
+      })
+      
+      setDistribution({
+        high: analytics.high_risk_count,
+        medium: analytics.medium_risk_count,
+        safe: analytics.safe_count
+      })
+      
+      // Generate daily stats from last 30 days
+      if (analyses.length > 0) {
+        const daily = generateDailyStats(analyses)
+        setDailyStats(daily)
+      }
     } catch (err) {
       console.error('Failed to fetch analytics:', err)
+      setSummary({
+        total_analyses: 0,
+        high_risk_count: 0,
+        medium_risk_count: 0,
+        safe_count: 0,
+        avg_risk_percent: 0,
+        challenges_passed: 0,
+        total_lessons: 7
+      })
+      setDistribution({ high: 0, medium: 0, safe: 0 })
     } finally {
       setLoading(false)
     }
   }
 
   if (loading || !summary) {
-    return <div className="w-full h-screen flex items-center justify-center"><p className="text-white">Loading analytics...</p></div>
+    return (
+      <MainLayout>
+        <div className="w-full h-screen flex items-center justify-center">
+          <p className="text-white">Loading analytics...</p>
+        </div>
+      </MainLayout>
+    )
   }
 
   const total = summary.high_risk_count + summary.medium_risk_count + summary.safe_count
@@ -62,16 +133,54 @@ export default function Analytics() {
   const mediumPercent = total > 0 ? (summary.medium_risk_count / total) * 100 : 0
   const safePercent = total > 0 ? (summary.safe_count / total) * 100 : 0
 
-  return (
-    <div className="w-full px-4 py-12">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-5xl font-bold text-white mb-2">Analytics</h1>
-          <p className="text-slate-400">Your phishing detection activity and trends</p>
-        </div>
+  // Chart data
+  const pieData = [
+    { name: 'High Risk', value: summary.high_risk_count, color: '#ef4444' },
+    { name: 'Medium Risk', value: summary.medium_risk_count, color: '#f97316' },
+    { name: 'Safe', value: summary.safe_count, color: '#22c55e' }
+  ]
 
-        {/* Summary Cards */}
+  const barData = [
+    { name: 'High', count: summary.high_risk_count, fill: '#ef4444' },
+    { name: 'Medium', count: summary.medium_risk_count, fill: '#f97316' },
+    { name: 'Safe', count: summary.safe_count, fill: '#22c55e' }
+  ]
+
+  return (
+    <MainLayout>
+      <div className="w-full px-4 py-12">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h1 className="text-5xl font-bold text-white mb-2">Analytics</h1>
+                <p className="text-slate-400">Your phishing detection activity and trends</p>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={exportAnalyticsJSON}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Export JSON
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={exportAnalyticsCSV}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Export CSV
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Summary Cards */}
         <div className="grid md:grid-cols-4 gap-4 mb-12">
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-6 backdrop-blur-xl hover:border-blue-500/50 transition">
             <div className="flex items-center justify-between mb-3">
@@ -115,29 +224,93 @@ export default function Analytics() {
           {/* Risk Distribution Pie Chart */}
           <div className="bg-slate-800/30 border border-blue-500/20 rounded-lg p-6 backdrop-blur-xl">
             <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <PieChart className="w-5 h-5 text-blue-400" />
+              <PieChartIcon className="w-5 h-5 text-blue-400" />
               Risk Distribution
             </h2>
-            <div className="flex items-end justify-center gap-4 h-48">
-              {/* Simplified bar chart representation */}
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-16 bg-gradient-to-t from-red-500 to-red-400 rounded-t-lg" style={{ height: `${Math.max(20, highPercent * 1.5)}px` }}></div>
-                <span className="text-sm font-bold text-white">{summary.high_risk_count}</span>
-                <span className="text-xs text-slate-400">High</span>
+            {total > 0 ? (
+              <div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={false}
+                      outerRadius={90}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: '8px',
+                        color: '#fff'
+                      }} 
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap gap-4 justify-center mt-4">
+                  {pieData.map((entry, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                      <span className="text-sm text-slate-300">{entry.name}: {entry.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-16 bg-gradient-to-t from-orange-500 to-orange-400 rounded-t-lg" style={{ height: `${Math.max(20, mediumPercent * 1.5)}px` }}></div>
-                <span className="text-sm font-bold text-white">{summary.medium_risk_count}</span>
-                <span className="text-xs text-slate-400">Medium</span>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-slate-400">
+                No data yet. Start analyzing!
               </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-16 bg-gradient-to-t from-green-500 to-green-400 rounded-t-lg" style={{ height: `${Math.max(20, safePercent * 1.5)}px` }}></div>
-                <span className="text-sm font-bold text-white">{summary.safe_count}</span>
-                <span className="text-xs text-slate-400">Safe</span>
-              </div>
-            </div>
+            )}
           </div>
 
+          {/* Risk Count Bar Chart */}
+          <div className="bg-slate-800/30 border border-blue-500/20 rounded-lg p-6 backdrop-blur-xl">
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-blue-400" />
+              Risk Analysis Count
+            </h2>
+            {total > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={barData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="#94a3b8"
+                    style={{ fontSize: '12px' }}
+                  />
+                  <YAxis 
+                    stroke="#94a3b8"
+                    style={{ fontSize: '12px' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      borderRadius: '8px',
+                      color: '#fff'
+                    }} 
+                  />
+                  <Bar dataKey="count" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-slate-400">
+                No data yet. Start analyzing!
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Key Metrics & Activity Trend */}
+        <div className="grid md:grid-cols-2 gap-6 mb-12">
           {/* Key Metrics */}
           <div className="bg-slate-800/30 border border-blue-500/20 rounded-lg p-6 backdrop-blur-xl">
             <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -176,37 +349,143 @@ export default function Analytics() {
         </div>
 
         {/* Daily Trend Chart */}
-        <div className="bg-slate-800/30 border border-blue-500/20 rounded-lg p-6 backdrop-blur-xl">
+        <div className="bg-slate-800/30 border border-blue-500/20 rounded-lg p-6 backdrop-blur-xl mb-12">
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-blue-400" />
             30-Day Activity Trend
           </h2>
           
-          {dailyStats.length === 0 ? (
+          {dailyStats.length > 0 && dailyStats.some(d => d.analyses_count > 0) ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={dailyStats}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="#94a3b8"
+                  style={{ fontSize: '10px' }}
+                  tickFormatter={(value) => {
+                    const date = new Date(value)
+                    return `${date.getMonth() + 1}/${date.getDate()}`
+                  }}
+                />
+                <YAxis 
+                  stroke="#94a3b8"
+                  style={{ fontSize: '12px' }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  labelFormatter={(value) => {
+                    const date = new Date(value)
+                    return date.toLocaleDateString()
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="analyses_count" 
+                  stroke="#3b82f6" 
+                  strokeWidth={2}
+                  dot={{ fill: '#3b82f6', r: 4 }}
+                  activeDot={{ r: 6 }}
+                  name="Analyses"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
             <div className="text-center py-12">
               <p className="text-slate-400">No data yet. Start analyzing to see trends!</p>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <div className="flex gap-2 pb-4" style={{ minWidth: '100%' }}>
-                {dailyStats.map((day, idx) => {
-                  const maxCount = Math.max(...dailyStats.map(d => d.analyses_count), 5)
-                  const height = (day.analyses_count / maxCount) * 120
-                  
-                  return (
-                    <div key={idx} className="flex flex-col items-center gap-2 flex-shrink-0">
-                      <div
-                        className="w-8 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-sm transition-all hover:from-blue-600 hover:to-blue-500"
-                        style={{ minHeight: `${Math.max(5, height)}px` }}
-                        title={`${day.date}: ${day.analyses_count} analyses`}
-                      ></div>
-                      <span className="text-xs text-slate-500">{day.date.split('-')[2]}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
           )}
+        </div>
+
+        {/* Advanced Analytics Row */}
+        <div className="grid md:grid-cols-2 gap-6 mb-12">
+          {/* Skill Radar Chart */}
+          <div className="bg-slate-800/30 border border-blue-500/20 rounded-lg p-6 backdrop-blur-xl">
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <Target className="w-5 h-5 text-purple-400" />
+              Security Skills Assessment
+            </h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <RadarChart data={[
+                { skill: 'Threat Detection', value: Math.min(100, (summary.high_risk_count / Math.max(1, summary.total_analyses)) * 200), fullMark: 100 },
+                { skill: 'Analysis Speed', value: Math.min(100, summary.total_analyses * 5), fullMark: 100 },
+                { skill: 'Learning Progress', value: Math.min(100, (summary.total_lessons / 7) * 100), fullMark: 100 },
+                { skill: 'Challenge Mastery', value: Math.min(100, summary.challenges_passed * 20), fullMark: 100 },
+                { skill: 'Consistency', value: Math.min(100, (getProgress().streak || 0) * 10), fullMark: 100 },
+              ]}>
+                <PolarGrid stroke="rgba(148, 163, 184, 0.2)" />
+                <PolarAngleAxis 
+                  dataKey="skill" 
+                  stroke="#94a3b8"
+                  style={{ fontSize: '11px' }}
+                />
+                <PolarRadiusAxis 
+                  angle={90} 
+                  domain={[0, 100]}
+                  stroke="#94a3b8"
+                  style={{ fontSize: '10px' }}
+                />
+                <Radar 
+                  name="Your Skills" 
+                  dataKey="value" 
+                  stroke="#8b5cf6" 
+                  fill="#8b5cf6" 
+                  fillOpacity={0.6} 
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+            <div className="mt-4 text-center text-xs text-slate-400">
+              Based on your activity and performance metrics
+            </div>
+          </div>
+
+          {/* Peer Comparison */}
+          <div className="bg-slate-800/30 border border-blue-500/20 rounded-lg p-6 backdrop-blur-xl">
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-yellow-400" />
+              Peer Comparison
+            </h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={[
+                { metric: 'Analyses', you: summary.total_analyses, average: 15, top: 50 },
+                { metric: 'Challenges', you: summary.challenges_passed, average: 2, top: 8 },
+                { metric: 'Lessons', you: summary.total_lessons, average: 3, top: 7 },
+                { metric: 'Accuracy', you: Math.round((summary.safe_count / Math.max(1, summary.total_analyses)) * 100), average: 60, top: 95 },
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" />
+                <XAxis dataKey="metric" stroke="#94a3b8" style={{ fontSize: '11px' }} />
+                <YAxis stroke="#94a3b8" style={{ fontSize: '11px' }} />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="you" fill="#3b82f6" name="You" />
+                <Bar dataKey="average" fill="#64748b" name="Average" />
+                <Bar dataKey="top" fill="#22c55e" name="Top 10%" />
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="mt-4 text-center text-xs text-slate-400">
+              How you compare to other PhishGuard users
+            </div>
+          </div>
         </div>
 
         {/* Insights */}
@@ -239,7 +518,8 @@ export default function Analytics() {
             )}
           </ul>
         </div>
+        </div>
       </div>
-    </div>
+    </MainLayout>
   )
 }

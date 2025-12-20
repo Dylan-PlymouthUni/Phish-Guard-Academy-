@@ -1,0 +1,234 @@
+import { Trophy, Medal, Star, TrendingUp, Award, Flame, Target } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { MainLayout } from '../components/layout/MainLayout'
+import { Card, CardContent } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import { motion } from 'framer-motion'
+import { getProgress, getAnalytics } from '../utils/storage'
+
+interface LeaderboardEntry {
+  rank: number
+  name: string
+  points: number
+  level: number
+  streak: number
+  analyses: number
+  achievements: number
+  avatar: string
+}
+
+export default function Leaderboard() {
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [currentUser, setCurrentUser] = useState<LeaderboardEntry | null>(null)
+  const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'all-time'>('all-time')
+
+  useEffect(() => {
+    loadLeaderboard()
+  }, [timeframe])
+
+  const loadLeaderboard = () => {
+    // Get current user progress
+    const progress = getProgress()
+    const analytics = getAnalytics()
+    
+    // Mock leaderboard data (in production, this would come from backend)
+    const mockLeaderboard: LeaderboardEntry[] = [
+      { rank: 1, name: 'CyberNinja', points: 15420, level: 28, streak: 45, analyses: 523, achievements: 28, avatar: '🥷' },
+      { rank: 2, name: 'PhishHunter', points: 13890, level: 25, streak: 38, analyses: 487, achievements: 25, avatar: '🎯' },
+      { rank: 3, name: 'SecurityPro', points: 12650, level: 23, streak: 34, analyses: 445, achievements: 23, avatar: '🛡️' },
+      { rank: 4, name: 'ThreatSeeker', points: 11200, level: 21, streak: 29, analyses: 401, achievements: 21, avatar: '🔍' },
+      { rank: 5, name: 'CodeGuardian', points: 10850, level: 20, streak: 27, analyses: 389, achievements: 19, avatar: '⚔️' },
+      { rank: 6, name: 'DataDefender', points: 9950, level: 18, streak: 25, analyses: 356, achievements: 18, avatar: '🦸' },
+      { rank: 7, name: 'NetSentinel', points: 9420, level: 17, streak: 22, analyses: 334, achievements: 17, avatar: '👁️' },
+      { rank: 8, name: 'InfoWarrior', points: 8890, level: 16, streak: 20, analyses: 312, achievements: 15, avatar: '⚡' },
+      { rank: 9, name: 'CyberScout', points: 8320, level: 15, streak: 18, analyses: 289, achievements: 14, avatar: '🎖️' },
+      { rank: 10, name: 'You', points: progress.total_points, level: progress.level, streak: progress.streak || 0, analyses: analytics.total_analyses, achievements: (progress.achievements?.length || 0), avatar: '😎' },
+    ]
+
+    // Sort by points
+    mockLeaderboard.sort((a, b) => b.points - a.points)
+    
+    // Update ranks
+    mockLeaderboard.forEach((entry, index) => {
+      entry.rank = index + 1
+    })
+
+    setLeaderboard(mockLeaderboard)
+    setCurrentUser(mockLeaderboard.find(e => e.name === 'You') || null)
+  }
+
+  const getRankColor = (rank: number) => {
+    if (rank === 1) return 'from-yellow-500 to-yellow-600'
+    if (rank === 2) return 'from-gray-300 to-gray-400'
+    if (rank === 3) return 'from-orange-600 to-orange-700'
+    return 'from-blue-500 to-purple-500'
+  }
+
+  const getRankIcon = (rank: number) => {
+    if (rank === 1) return <Trophy className="w-6 h-6 text-yellow-400" />
+    if (rank === 2) return <Medal className="w-6 h-6 text-gray-400" />
+    if (rank === 3) return <Medal className="w-6 h-6 text-orange-400" />
+    return <Star className="w-5 h-5 text-blue-400" />
+  }
+
+  return (
+    <MainLayout>
+      <div className="max-w-6xl mx-auto px-4 py-12">
+        {/* Header */}
+        <div className="mb-12">
+          <div className="flex items-center gap-3 mb-2">
+            <Trophy className="w-10 h-10 text-yellow-400" />
+            <h1 className="text-5xl font-bold text-white">Leaderboard</h1>
+          </div>
+          <p className="text-slate-400">Compete with the best phishing hunters worldwide</p>
+        </div>
+
+        {/* Timeframe Selector */}
+        <div className="mb-8 flex gap-3">
+          {(['daily', 'weekly', 'all-time'] as const).map(tf => (
+            <button
+              key={tf}
+              onClick={() => setTimeframe(tf)}
+              className={`px-6 py-3 rounded-lg font-medium transition ${
+                timeframe === tf
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {tf === 'all-time' ? 'All Time' : tf.charAt(0).toUpperCase() + tf.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Current User Card */}
+        {currentUser && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <Card className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-blue-500/50">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="text-4xl">{currentUser.avatar}</div>
+                    <div>
+                      <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                        {currentUser.name}
+                        <Badge variant="info">Rank #{currentUser.rank}</Badge>
+                      </h3>
+                      <p className="text-slate-400">Your current position</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-6">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-yellow-400">{currentUser.points.toLocaleString()}</p>
+                      <p className="text-xs text-slate-400">Points</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-blue-400">{currentUser.level}</p>
+                      <p className="text-xs text-slate-400">Level</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-orange-400 flex items-center gap-1">
+                        <Flame className="w-6 h-6" />{currentUser.streak}
+                      </p>
+                      <p className="text-xs text-slate-400">Streak</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Leaderboard Table */}
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-hidden">
+              {leaderboard.map((entry, index) => (
+                <motion.div
+                  key={entry.name}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className={`flex items-center gap-4 p-6 border-b border-slate-700 hover:bg-slate-800/50 transition ${
+                    entry.name === 'You' ? 'bg-blue-600/10' : ''
+                  }`}
+                >
+                  {/* Rank */}
+                  <div className="w-16 flex items-center justify-center">
+                    {entry.rank <= 3 ? (
+                      <div className={`flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br ${getRankColor(entry.rank)}`}>
+                        {getRankIcon(entry.rank)}
+                      </div>
+                    ) : (
+                      <span className="text-2xl font-bold text-slate-400">#{entry.rank}</span>
+                    )}
+                  </div>
+
+                  {/* Avatar & Name */}
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="text-3xl">{entry.avatar}</div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">{entry.name}</h3>
+                      <p className="text-sm text-slate-400">Level {entry.level}</p>
+                    </div>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="hidden md:flex gap-6">
+                    <div className="text-center">
+                      <div className="flex items-center gap-1 text-yellow-400 font-bold">
+                        <Star className="w-4 h-4" />
+                        {entry.points.toLocaleString()}
+                      </div>
+                      <p className="text-xs text-slate-500">Points</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center gap-1 text-orange-400 font-bold">
+                        <Flame className="w-4 h-4" />
+                        {entry.streak}
+                      </div>
+                      <p className="text-xs text-slate-500">Streak</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center gap-1 text-blue-400 font-bold">
+                        <Target className="w-4 h-4" />
+                        {entry.analyses}
+                      </div>
+                      <p className="text-xs text-slate-500">Analyses</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center gap-1 text-purple-400 font-bold">
+                        <Award className="w-4 h-4" />
+                        {entry.achievements}
+                      </div>
+                      <p className="text-xs text-slate-500">Badges</p>
+                    </div>
+                  </div>
+
+                  {/* Mobile Stats */}
+                  <div className="md:hidden">
+                    <p className="text-xl font-bold text-yellow-400">{entry.points.toLocaleString()}</p>
+                    <p className="text-xs text-slate-500">points</p>
+                  </div>
+
+                  {/* Trend */}
+                  <div className="hidden lg:block">
+                    <TrendingUp className="w-5 h-5 text-green-400" />
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Season Info */}
+        <div className="mt-8 text-center text-slate-400 text-sm">
+          <p>🏆 Season 1 ends in 23 days • Rewards: Exclusive badges & bonus XP</p>
+        </div>
+      </div>
+    </MainLayout>
+  )
+}

@@ -4,8 +4,7 @@ export interface Challenge {
   description: string
   difficulty: string
   time_limit: number
-  points_reward: number
-  passing_score: number
+  points: number
   questions: Question[]
   stats?: ChallengeStats
 }
@@ -13,9 +12,10 @@ export interface Challenge {
 export interface Question {
   id: string
   question: string
+  type?: string
   options: string[]
-  correct_answer: string
-  explanation: string
+  correct_answer?: string
+  explanation?: string
 }
 
 export interface ChallengeStats {
@@ -28,10 +28,9 @@ export interface Lesson {
   id: string
   title: string
   description: string
-  category: string
   difficulty: string
   duration: number
-  points_reward: number
+  points: number
   content: string
   completed?: boolean
 }
@@ -47,13 +46,16 @@ export interface UserSettings {
 }
 
 export interface AnalysisResult {
-  overall_risk_percent: number
-  model_risk_percent: number
-  url_risk_percent: number
-  phrase_risk_percent: number
-  ocr_text: string
-  urls: URLInfo[]
-  detected_phrases: string[]
+  risk: number
+  findings: Finding[]
+  boxes?: any[]
+}
+
+export interface Finding {
+  type: string
+  label: string
+  detail: string
+  severity: string
 }
 
 export interface URLInfo {

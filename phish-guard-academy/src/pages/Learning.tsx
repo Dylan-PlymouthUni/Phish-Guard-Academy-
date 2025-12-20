@@ -7,7 +7,7 @@ interface Lesson {
   description: string
   difficulty: string
   estimated_time: number
-  points_reward: number
+  points: number
   completed: boolean
 }
 
@@ -46,10 +46,37 @@ export default function Learning() {
         fetch('/api/lessons')
       ])
       
-      if (progressRes.ok) setProgress(await progressRes.json())
-      if (lessonsRes.ok) setLessons(await lessonsRes.json())
+      if (progressRes.ok) {
+        const data = await progressRes.json()
+        setProgress({
+          total_points: data.total_points || 0,
+          level: data.level || 1,
+          experience: data.experience || 0,
+          lessons_completed: data.lessons_completed || data.completed_lessons?.length || 0,
+          challenges_passed: data.challenges_passed || data.completed_challenges?.length || 0,
+          achievements: data.achievements || []
+        })
+      }
+      if (lessonsRes.ok) {
+        const data = await lessonsRes.json()
+        setLessons(data.map((l: any) => ({
+          ...l,
+          estimated_time: l.duration || l.estimated_time || 10,
+          completed: false
+        })))
+      }
     } catch (err) {
       console.error('Failed to fetch:', err)
+      // Set defaults on error
+      setProgress({
+        total_points: 0,
+        level: 1,
+        experience: 0,
+        lessons_completed: 0,
+        challenges_passed: 0,
+        achievements: []
+      })
+      setLessons([])
     } finally {
       setLoading(false)
     }
@@ -91,11 +118,11 @@ export default function Learning() {
               </div>
               <div>
                 <p className="text-slate-400 text-sm mb-1">Lessons</p>
-                <p className="text-4xl font-bold text-cyan-400">{progress.lessons_completed}</p>
+                <p className="text-4xl font-bold text-cyan-400">{progress.lessons_completed || 0}</p>
               </div>
               <div>
                 <p className="text-slate-400 text-sm mb-1">Achievements</p>
-                <p className="text-4xl font-bold text-pink-400">{progress.achievements.filter(a => a.unlocked).length}</p>
+                <p className="text-4xl font-bold text-pink-400">{progress.achievements?.filter(a => a.unlocked).length || 0}</p>
               </div>
             </div>
 
@@ -103,7 +130,7 @@ export default function Learning() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-slate-400">Experience to next level</span>
-                <span className="text-sm font-bold text-white">{progress.experience}/500</span>
+                <span className="text-sm font-bold text-white">{progress.experience || 0}/500</span>
               </div>
               <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
                 <div
@@ -116,21 +143,22 @@ export default function Learning() {
         </div>
 
         {/* Achievements */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <Trophy className="w-6 h-6 text-yellow-400" />
-            Achievements ({progress.achievements.filter(a => a.unlocked).length}/{progress.achievements.length})
-          </h2>
-          <div className="grid md:grid-cols-3 gap-4">
-            {progress.achievements.map(ach => (
-              <div
-                key={ach.id}
-                className={`p-4 rounded-lg border transition ${
-                  ach.unlocked
-                    ? 'bg-blue-500/10 border-blue-500/30 hover:border-blue-500/50'
-                    : 'bg-slate-800/30 border-slate-700 opacity-50'
-                }`}
-              >
+        {progress.achievements && progress.achievements.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+              <Trophy className="w-6 h-6 text-yellow-400" />
+              Achievements ({progress.achievements.filter(a => a.unlocked).length}/{progress.achievements.length})
+            </h2>
+            <div className="grid md:grid-cols-3 gap-4">
+              {progress.achievements.map(ach => (
+                <div
+                  key={ach.id}
+                  className={`p-4 rounded-lg border transition ${
+                    ach.unlocked
+                      ? 'bg-blue-500/10 border-blue-500/30 hover:border-blue-500/50'
+                      : 'bg-slate-800/30 border-slate-700 opacity-50'
+                  }`}
+                >
                 <div className="text-3xl mb-2">{ach.icon}</div>
                 <h3 className="text-white font-bold">{ach.name}</h3>
                 <p className="text-sm text-slate-400 mb-2">{ach.description}</p>
@@ -140,12 +168,13 @@ export default function Learning() {
             ))}
           </div>
         </div>
+        )}
 
         {/* Lessons */}
         <div>
           <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-blue-400" />
-            Lessons ({progress.lessons_completed} completed)
+            Lessons ({progress.lessons_completed || 0} completed)
           </h2>
 
           {selectedLesson ? (
@@ -160,7 +189,7 @@ export default function Learning() {
                 {lessons.find(l => l.id === selectedLesson)?.title}
               </h3>
               <div className="bg-slate-900/50 p-6 rounded-lg text-slate-300 mb-6 max-h-96 overflow-y-auto">
-                <p>Lesson content loads here...</p>
+                <div>Lesson content loads here...</div>
               </div>
               <button className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition">
                 Mark as Complete
@@ -190,7 +219,7 @@ export default function Learning() {
                         </span>
                         <span className="flex items-center gap-1">
                           <Zap className="w-4 h-4" />
-                          +{lesson.points_reward} pts
+                          +{lesson.points} pts
                         </span>
                       </div>
                     </div>

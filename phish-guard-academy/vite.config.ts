@@ -9,7 +9,12 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/ocr_status': 'http://localhost:8000',
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/analyze_screenshot': 'http://localhost:8000',
+      '/analyze_text': 'http://localhost:8000',
       '/analyze': 'http://localhost:8000',
       '/analyze_image': 'http://localhost:8000',
       '/annotated_image': 'http://localhost:8000',
@@ -17,6 +22,7 @@ export default defineConfig({
       '/debug_ocr': 'http://localhost:8000',
       '/feedback': 'http://localhost:8000',
       '/enrich_url': 'http://localhost:8000',
+      '/ocr_status': 'http://localhost:8000',
     }
   }
 })

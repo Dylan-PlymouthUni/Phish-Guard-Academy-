@@ -4,15 +4,26 @@ interface CardProps {
   className?: string;
   children: React.ReactNode;
   hover?: boolean;
+  onClick?: () => void;
   badge?: { label: string; variant: 'success' | 'warning' | 'danger' };
 }
 
-export function Card({ className = '', children, hover = false, badge }: CardProps) {
+export function Card({ className = '', children, hover = false, onClick, badge }: CardProps) {
+  const handleClick = (e: React.MouseEvent) => {
+    console.log('🔥 CARD CLICKED!', { onClick: typeof onClick, hover })
+    alert('Card was clicked! onClick type: ' + typeof onClick)
+    if (onClick) {
+      onClick()
+    }
+  }
+
   return (
     <div
+      onClick={handleClick}
+      style={{ position: 'relative', zIndex: 1 }}
       className={`
-        bg-slate-800/50 border border-slate-700/50 rounded-lg p-6
-        ${hover ? 'hover:border-blue-500/50 hover:bg-slate-800 transition' : ''}
+        bg-slate-800/50 border-4 border-red-500 rounded-lg p-6
+        ${hover ? 'hover:border-blue-500 hover:bg-slate-800 transition cursor-pointer' : ''}
         ${className}
       `}
     >

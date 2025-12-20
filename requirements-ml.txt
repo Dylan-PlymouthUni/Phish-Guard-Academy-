@@ -1,0 +1,40 @@
+# Advanced ML Dependencies
+# Install with: pip install -r requirements-ml.txt
+
+# Deep Learning Frameworks
+torch>=2.1.0
+transformers>=4.35.0
+tensorflow>=2.15.0  # Optional, for TF models
+torchvision>=0.16.0
+
+# NLP Libraries
+nltk>=3.8.1
+spacy>=3.7.0
+beautifulsoup4>=4.12.0
+langdetect>=1.0.9
+
+# Computer Vision
+opencv-python>=4.8.0
+easyocr>=1.7.0  # Better OCR than pytesseract
+pytesseract>=0.3.10  # Keep as backup
+
+# Explainable AI
+shap>=0.43.0
+lime>=0.2.0.1
+
+# Data Collection & Processing
+whois>=0.9.27
+dnspython>=2.4.2
+cryptography>=41.0.5  # For SSL cert analysis
+python-whois>=0.8.0
+tldextract>=5.0.0
+
+# Model Serving & Monitoring
+onnx>=1.15.0
+onnxruntime>=1.16.0
+mlflow>=2.9.0  # For model tracking & versioning
+
+# Additional utilities
+tqdm>=4.66.0
+seaborn>=0.13.0
+matplotlib>=3.8.0

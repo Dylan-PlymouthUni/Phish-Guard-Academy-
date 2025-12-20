@@ -5,9 +5,11 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Alert } from '../components/ui/Alert'
+import { Toast } from '../components/ui/Toast'
 import { useApi } from '../hooks/useApi'
 import { SkeletonCard } from '../components/ui/Skeleton'
 import { Challenge } from '../types'
+import { completeChallenge, getProgress } from '../utils/storage'
 
 export default function Challenges() {
   const { data: challenges, loading } = useApi<Challenge[]>('/api/challenges')
@@ -18,6 +20,13 @@ export default function Challenges() {
   const [result, setResult] = useState<any>(null)
   const [timeLeft, setTimeLeft] = useState(0)
   const [started, setStarted] = useState(false)
+  const [showToast, setShowToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
+
+  // DEBUG: Show alert when component mounts
+  useEffect(() => {
+    console.log('🎯 Challenges page loaded! Challenges:', challenges?.length || 0)
+  }, [challenges])
 
   useEffect(() => {
     if (!started || !selectedChallenge || timeLeft <= 0) return
@@ -55,6 +64,18 @@ export default function Challenges() {
         const data = await res.json()
         setResult(data)
         setSubmitted(true)
+        
+        // Record challenge completion in localStorage
+        const passed = data.passed || data.score >= 70
+        completeChallenge(selectedChallenge.id, selectedChallenge.points, passed)
+        
+        // Show toast notification
+        if (passed) {
+          setToastMessage(`🎉 Challenge passed! +${selectedChallenge.points} points earned!`)
+        } else {
+          setToastMessage(`💪 Keep trying! You can retake this challenge.`)
+        }
+        setShowToast(true)
       }
     } catch (err) {
       console.error('Failed to submit:', err)
@@ -116,7 +137,7 @@ export default function Challenges() {
                 {question.options.map((option, idx) => (
                   <label
                     key={idx}
-                    className={`p-4 rounded-lg border-2 cursor-pointer transition ${
+                    className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition ${
                       answers[question.id] === option
                         ? 'border-blue-500 bg-blue-500/10'
                         : 'border-slate-600 hover:border-slate-500 bg-slate-900/30'
@@ -128,9 +149,9 @@ export default function Challenges() {
                       value={option}
                       checked={answers[question.id] === option}
                       onChange={() => handleAnswer(question.id, option)}
-                      className="mr-3"
+                      className="w-4 h-4 mr-3 flex-shrink-0"
                     />
-                    <span className="text-white">{option}</span>
+                    <span className="text-white text-left flex-1">{option}</span>
                   </label>
                 ))}
               </div>
@@ -229,9 +250,12 @@ export default function Challenges() {
             const completed = stats.passed > 0
 
             return (
-              <Card key={challenge.id} hover onClick={() => startChallenge(challenge)}>
-                <CardContent>
-                  <div className="flex items-start justify-between mb-4">
+              <button
+                key={challenge.id}
+                onClick={() => startChallenge(challenge)}
+                className="w-full text-left bg-slate-800/50 border border-slate-700/50 rounded-lg p-6 hover:border-blue-500/50 hover:bg-slate-800 transition cursor-pointer"
+              >
+                <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <h3 className="text-xl font-bold text-white mb-1">{challenge.title}</h3>
                       <p className="text-slate-400 text-sm">{challenge.description}</p>
@@ -247,7 +271,7 @@ export default function Challenges() {
                     </span>
                     <span className="text-sm text-yellow-400 font-bold flex items-center gap-1">
                       <Target className="w-4 h-4" />
-                      +{challenge.points_reward} pts
+                      +{challenge.points} pts
                     </span>
                   </div>
 
@@ -265,15 +289,18 @@ export default function Challenges() {
                       </div>
                     </div>
                   )}
-
-                  <Button fullWidth variant={completed ? 'secondary' : 'primary'}>
-                    {completed ? 'Retry' : 'Start Challenge'}
-                  </Button>
-                </CardContent>
-              </Card>
+              </button>
             )
           })}
         </div>
+        
+        {showToast && (
+          <Toast
+            message={toastMessage}
+            type="success"
+            onClose={() => setShowToast(false)}
+          />
+        )}
       </div>
     </MainLayout>
   )

@@ -1,0 +1,21 @@
+nohup: ignoring input
+INFO:     Will watch for changes in these directories: ['/workspaces/Phish-Guard-Academy-']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [12438] using StatReload
+INFO:     Started server process [12588]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:server.app:Initializing Phishing Ensemble...
+WARNING:easyocr.easyocr:Neither CUDA nor MPS are available - defaulting to CPU. Note: This module is much faster with a GPU.
+INFO:ml.ensemble:Loaded trained URL model: 2.0.0-trained
+INFO:ml.ensemble:Model accuracy: 100.00%
+INFO:ml.ensemble:Ensemble initialized with weights: {'url': 0.55, 'text': 0.25, 'visual': 0.15, 'heuristic': 0.05}
+INFO:server.app:Image loaded: (500, 281)
+ERROR:server.app:Analysis error: PhishingEnsemble.analyze_screenshot() got an unexpected keyword argument 'screenshot'
+Traceback (most recent call last):
+  File "/workspaces/Phish-Guard-Academy-/server/app.py", line 115, in analyze
+    result = ensemble.analyze_screenshot(screenshot=pil_image)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: PhishingEnsemble.analyze_screenshot() got an unexpected keyword argument 'screenshot'
+INFO:     176.249.216.5:0 - "POST /api/analyze HTTP/1.1" 200 OK
+INFO:     176.249.216.5:0 - "POST /api/analyze HTTP/1.1" 200 OK

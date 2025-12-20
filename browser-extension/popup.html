@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PhishGuard Analyzer</title>
+  <style>
+    body {
+      width: 350px;
+      min-height: 400px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      color: white;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .analyze-section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .input-group {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    input {
+      width: 100%;
+      padding: 8px 12px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    button:hover {
+      transform: translateY(-1px);
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 16px;
+      padding: 12px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 8px;
+      display: none;
+    }
+    .result.show {
+      display: block;
+    }
+    .risk-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .risk-high {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+    .risk-medium {
+      background: rgba(249, 115, 22, 0.2);
+      color: #f97316;
+    }
+    .risk-safe {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+    }
+    .findings {
+      font-size: 12px;
+      color: #cbd5e1;
+      margin-top: 8px;
+    }
+    .findings li {
+      margin: 4px 0;
+    }
+    .quick-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .quick-btn {
+      padding: 8px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      color: #93c5fd;
+      font-size: 11px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .quick-btn:hover {
+      background: rgba(59, 130, 246, 0.2);
+    }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🛡️ PhishGuard</div>
+    <div class="subtitle">AI-Powered Phishing Detection</div>
+  </div>
+
+  <div class="quick-actions">
+    <div class="quick-btn" id="checkCurrentPage">Check This Page</div>
+    <div class="quick-btn" id="openDashboard">Open Dashboard</div>
+  </div>
+
+  <div class="analyze-section">
+    <div class="input-group">
+      <label for="urlInput">Analyze URL</label>
+      <input type="text" id="urlInput" placeholder="Enter URL to analyze...">
+    </div>
+    <button id="analyzeBtn">Analyze URL</button>
+  </div>
+
+  <div class="result" id="result">
+    <div id="resultContent"></div>
+  </div>
+
+  <div class="loading" id="loading" style="display:none;">
+    Analyzing...
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

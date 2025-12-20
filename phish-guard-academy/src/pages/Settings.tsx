@@ -1,227 +1,883 @@
-import { Bell, Shield, Palette, Lock, HardDrive, RotateCcw, AlertCircle } from 'lucide-react'
+import { Bell, Shield, Palette, Lock, Database, Download, RotateCcw, Trash2, Eye, Key, Brain, Zap, Award, Sparkles, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { MainLayout } from '../components/layout/MainLayout'
 import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Alert } from '../components/ui/Alert'
-import { useApi } from '../hooks/useApi'
-import { UserSettings } from '../types'
+import { Badge } from '../components/ui/Badge'
+import { Toast } from '../components/ui/Toast'
+import { getSettings, saveSettings as saveToStorage, resetSettings as resetToDefaults, exportAllData, resetAllData } from '../utils/storage'
+
+interface Settings {
+  notifications: boolean
+  email_alerts: boolean
+  difficulty_preference: string
+  theme: string
+  auto_save: boolean
+  language?: string
+  reduced_motion?: boolean
+  sound_effects?: boolean
+  daily_reminder?: boolean
+  weekly_report?: boolean
+  ml_sensitivity?: "strict" | "balanced" | "relaxed"
+  ml_whitelist?: string[]
+  auto_analyze?: boolean
+  show_confidence?: boolean
+}
 
 export default function SettingsPage() {
-  const { data: initialSettings, loading } = useApi<UserSettings>('/api/settings')
-  const [settings, setSettings] = useState<UserSettings | null>(null)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [settings, setSettings] = useState<Settings>({
+    notifications: true,
+    email_alerts: false,
+    difficulty_preference: 'medium',
+    theme: 'dark',
+    auto_save: true,
+    language: 'en',
+    reduced_motion: false,
+    sound_effects: true,
+    daily_reminder: true,
+    weekly_report: false,
+    ml_sensitivity: 'balanced',
+    ml_whitelist: ['github.dev', 'localhost', 'codespaces.app'],
+    auto_analyze: true,
+    show_confidence: true
+  })
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'general' | 'notifications' | 'ml' | 'data'>('general')
+  const [showToast, setShowToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
 
   useEffect(() => {
-    if (initialSettings) setSettings(initialSettings)
-  }, [initialSettings])
+    fetchSettings()
+  }, [])
 
-  const saveSettings = async () => {
-    if (!settings) return
+  const fetchSettings = async () => {
     try {
-      setError(null)
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      })
-      if (res.ok) {
-        setSaved(true)
-        setTimeout(() => setSaved(false), 3000)
-      } else {
-        setError(`Failed to save (${res.status})`)
+      const data = getSettings()
+      setSettings(data)
+      // Apply theme on load
+      if (data.theme === 'light') {
+        document.documentElement.classList.add('light-mode')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error')
+      console.error('Failed to fetch settings:', err)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const updateSetting = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
-    if (settings) setSettings({ ...settings, [key]: value })
+  const updateSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
+    const updated = { ...settings, [key]: value }
+    setSettings(updated)
+    // Auto-save immediately
+    saveToStorage(updated)
+    
+    // Apply theme changes to DOM
+    if (key === 'theme') {
+      if (value === 'light') {
+        document.documentElement.classList.add('light-mode')
+        setToastMessage('☀️ Light mode activated')
+      } else {
+        document.documentElement.classList.remove('light-mode')
+        setToastMessage('🌙 Dark mode activated')
+      }
+      setShowToast(true)
+    } else if (key === 'difficulty_preference') {
+      const diffEmoji: Record<string, string> = { easy: '😊', medium: '😐', hard: '😤' }
+      setToastMessage(`${diffEmoji[value as string]} Difficulty: ${value}`)
+      setShowToast(true)
+    }
   }
 
-  const resetSettings = () => {
+  const resetSettings = async () => {
     if (confirm('Reset all settings to defaults?')) {
-      fetch('/api/settings/reset', { method: 'POST' }).then(() => {
-        setSaved(true)
-        setTimeout(() => setSaved(false), 3000)
-      })
+      try {
+        const defaults = resetToDefaults()
+        setSettings(defaults)
+        // Remove light mode if it was applied
+        document.documentElement.classList.remove('light-mode')
+      } catch (err) {
+        console.error('Failed to reset:', err)
+      }
     }
   }
 
   const exportData = () => {
-    window.location.href = '/api/export-data'
+    const data = exportAllData()
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `phishguard-data-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
-  if (loading || !settings) {
+  if (loading) {
     return (
       <MainLayout>
-        <div className="max-w-2xl mx-auto px-4 py-12">
-          <Card>
-            <CardContent className="text-center">Loading settings...</CardContent>
-          </Card>
+        <div className="max-w-4xl mx-auto px-4 py-12">
+          <div className="text-center text-white">Loading settings...</div>
         </div>
       </MainLayout>
     )
   }
 
+  const tabs = [
+    { id: 'general', label: 'General', icon: Palette },
+    { id: 'ml', label: 'ML Detection', icon: Brain },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'data', label: 'Data', icon: Database }
+  ] as const
+
   return (
     <MainLayout>
-      <div className="max-w-2xl mx-auto px-4 py-12">
-        <div className="mb-12">
-          <h1 className="text-5xl font-bold text-white mb-2">Settings</h1>
-          <p className="text-slate-400">Customize your experience</p>
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        {/* Header with gradient */}
+        <div className="mb-8 relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 blur-3xl -z-10"></div>
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+            Settings
+          </h1>
+          <p className="text-slate-400 flex items-center gap-2">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            All changes save automatically
+          </p>
         </div>
 
-        {saved && (
-          <Alert variant="success" className="mb-6">✓ Settings saved</Alert>
-        )}
-        {error && (
-          <Alert variant="error" className="mb-6">{error}</Alert>
+        {/* Enhanced tabs with icons */}
+        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+          {tabs.map(tab => {
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/50 scale-105'
+                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-white hover:scale-102'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {activeTab === 'general' && (
+          <div className="space-y-6">
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-blue-400" />
+                  Appearance
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-slate-300 mb-3 font-medium">Theme</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { value: 'dark', label: 'Dark', icon: '🌙' },
+                        { value: 'light', label: 'Light', icon: '☀️' }
+                      ].map(theme => (
+                        <button
+                          key={theme.value}
+                          onClick={() => updateSetting('theme', theme.value)}
+                          className={`p-4 rounded-lg border-2 transition ${
+                            settings.theme === theme.value
+                              ? 'border-blue-500 bg-blue-500/10'
+                              : 'border-slate-700 bg-slate-800/30 hover:border-slate-600'
+                          }`}
+                        >
+                          <div className="text-2xl mb-2">{theme.icon}</div>
+                          <div className="text-white font-medium">{theme.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-blue-400" />
+                  Learning Preferences
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-slate-300 mb-3 font-medium">Default Challenge Difficulty</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { value: 'easy', label: 'Easy' },
+                        { value: 'medium', label: 'Medium' },
+                        { value: 'hard', label: 'Hard' }
+                      ].map(level => (
+                        <button
+                          key={level.value}
+                          onClick={() => updateSetting('difficulty_preference', level.value)}
+                          className={`px-4 py-3 rounded-lg font-medium border-2 transition ${
+                            settings.difficulty_preference === level.value
+                              ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                              : 'border-slate-700 bg-slate-800/30 text-slate-300 hover:border-slate-600'
+                          }`}
+                        >
+                          {level.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">Auto-save Progress</div>
+                      <div className="text-sm text-slate-400">Automatically save your progress</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.auto_save}
+                        onChange={(e) => updateSetting('auto_save', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-blue-400" />
+                  Accessibility
+                </h3>
+                
+                <div className="space-y-3">
+                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
+                    <div>
+                      <div className="text-white font-medium">Reduced Motion</div>
+                      <div className="text-sm text-slate-400">Minimize animations</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.reduced_motion}
+                      onChange={(e) => updateSetting('reduced_motion', e.target.checked)}
+                      className="w-5 h-5 rounded"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
+                    <div>
+                      <div className="text-white font-medium">Sound Effects</div>
+                      <div className="text-sm text-slate-400">Play audio feedback</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.sound_effects}
+                      onChange={(e) => updateSetting('sound_effects', e.target.checked)}
+                      className="w-5 h-5 rounded"
+                    />
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
-        {/* Appearance */}
-        <Card className="mb-6">
-          <CardContent>
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <Palette className="w-5 h-5 text-blue-400" />
-              Appearance
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-slate-300 mb-2 font-medium">Theme</label>
-                <select
-                  value={settings.theme}
-                  onChange={(e) => updateSetting('theme', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white"
-                >
-                  <option value="dark">Dark</option>
-                  <option value="light">Light</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-slate-300 mb-2 font-medium">Language</label>
-                <select
-                  value={settings.language}
-                  onChange={(e) => updateSetting('language', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white"
-                >
-                  <option value="en">English</option>
-                  <option value="es">Español</option>
-                  <option value="fr">Français</option>
-                </select>
+        {activeTab === 'ml' && (
+          <div className="space-y-6">
+            {/* Friendly intro banner */}
+            <div className="bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-cyan-500/20 border border-purple-500/30 rounded-lg p-6">
+              <div className="flex items-start gap-4">
+                <div className="text-4xl">🛡️</div>
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-2">Smart Protection Settings</h3>
+                  <p className="text-slate-300 text-sm leading-relaxed">
+                    Our detection system learns from thousands of real phishing attempts to protect you. 
+                    These settings let you choose how cautious you want the protection to be - 
+                    like adjusting your home security from "always alert" to "relaxed but safe."
+                  </p>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Learning */}
-        <Card className="mb-6">
-          <CardContent>
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <Shield className="w-5 h-5 text-blue-400" />
-              Learning
-            </h2>
-            <div>
-              <label className="block text-slate-300 mb-3 font-medium">Challenge Difficulty</label>
-              <div className="grid grid-cols-3 gap-3">
-                {(['beginner', 'intermediate', 'advanced'] as const).map(level => (
-                  <button
-                    key={level}
-                    onClick={() => updateSetting('difficulty_level', level)}
-                    className={`px-4 py-3 rounded-lg font-medium transition ${
-                      settings.difficulty_level === level
-                        ? 'bg-blue-600 text-white border border-blue-500'
-                        : 'bg-slate-700 text-slate-300 border border-slate-600'
-                    }`}
+            {/* How Sensitive Should Protection Be? */}
+            <Card>
+              <CardContent>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-purple-400" />
+                    How Careful Should We Be?
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    Choose how cautious you want the system to be when checking suspicious content
+                  </p>
+                </div>
+                
+                <div className="space-y-3">
+                  {[
+                    { 
+                      value: 'strict', 
+                      label: '🔴 Extra Careful', 
+                      emoji: '🚨',
+                      title: 'Block Anything Suspicious',
+                      desc: 'Best for beginners or high-risk situations',
+                      example: 'Will warn about anything that looks even slightly odd',
+                      threshold: 'Warns when 50% or more confident it\'s phishing'
+                    },
+                    { 
+                      value: 'balanced', 
+                      label: '⚖️ Balanced (Recommended)', 
+                      emoji: '✅',
+                      title: 'Smart Middle Ground',
+                      desc: 'Perfect for most people',
+                      example: 'Catches phishing while allowing normal websites',
+                      threshold: 'Warns when 65% or more confident it\'s phishing'
+                    },
+                    { 
+                      value: 'relaxed', 
+                      label: '🟢 Trust More', 
+                      emoji: '😊',
+                      title: 'Only Obvious Threats',
+                      desc: 'For experienced users who recognize phishing',
+                      example: 'Only warns about clear phishing attempts',
+                      threshold: 'Warns when 75% or more confident it\'s phishing'
+                    }
+                  ].map(level => (
+                    <button
+                      key={level.value}
+                      onClick={() => {
+                        updateSetting('ml_sensitivity', level.value as "strict" | "balanced" | "relaxed")
+                        setToastMessage(`${level.emoji} Protection level: ${level.title}`)
+                        setShowToast(true)
+                      }}
+                      className={`w-full p-4 rounded-lg border-2 transition text-left ${
+                        settings.ml_sensitivity === level.value
+                          ? 'border-purple-500 bg-purple-500/10 shadow-lg'
+                          : 'border-slate-700 bg-slate-800/30 hover:border-purple-400 hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl">{level.emoji}</div>
+                        <div className="flex-1">
+                          <div className="text-white font-medium mb-1 flex items-center gap-2">
+                            {level.title}
+                            {settings.ml_sensitivity === level.value && (
+                              <Badge variant="success">Active</Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-400 mb-2">{level.desc}</div>
+                          <div className="text-xs text-slate-500 italic">Example: {level.example}</div>
+                          <div className="text-xs text-purple-400 mt-2">📊 {level.threshold}</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* What does this mean? */}
+                <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="text-sm text-blue-300 font-medium mb-1">💡 What's the difference?</div>
+                  <div className="text-xs text-slate-400 leading-relaxed">
+                    Think of it like a smoke detector: <strong className="text-white">Extra Careful</strong> is like a sensitive detector that beeps at burnt toast. 
+                    <strong className="text-white"> Balanced</strong> catches real fires but ignores cooking smoke. 
+                    <strong className="text-white"> Trust More</strong> only alerts for serious fires. Most people should use Balanced!
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Convenience Features */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-yellow-400" />
+                  Convenience Features
+                </h3>
+                
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div className="flex-1 pr-4">
+                      <div className="text-white font-medium mb-1">⚡ Instant Analysis</div>
+                      <div className="text-sm text-slate-400">
+                        Check URLs automatically as you type them in. No need to click "Analyze" button.
+                      </div>
+                      <div className="text-xs text-slate-500 mt-2 italic">
+                        Saves time! But uses more resources.
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={settings.auto_analyze}
+                        onChange={(e) => updateSetting('auto_analyze', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-purple-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">Auto-Analyze URLs</div>
+                      <div className="text-sm text-slate-400">Automatically scan URLs as you type</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.auto_analyze}
+                        onChange={(e) => updateSetting('auto_analyze', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-purple-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div className="flex-1 pr-4">
+                      <div className="text-white font-medium mb-1">📊 Show Confidence Scores</div>
+                      <div className="text-sm text-slate-400">
+                        Display how confident the system is about its decision (e.g., "85% sure this is phishing").
+                      </div>
+                      <div className="text-xs text-slate-500 mt-2 italic">
+                        Helpful for learning! But can be technical.
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={settings.show_confidence}
+                        onChange={(e) => updateSetting('show_confidence', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-purple-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Trusted Websites */}
+            <Card>
+              <CardContent>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-green-400" />
+                    My Trusted Websites
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    Add websites you use regularly so they're never flagged as suspicious
+                  </p>
+                </div>
+
+                {/* Why use this */}
+                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <div className="text-sm text-green-300 font-medium mb-1">✅ When to add websites:</div>
+                  <ul className="text-xs text-slate-400 space-y-1 ml-4 list-disc">
+                    <li>Your work or school websites</li>
+                    <li>Development/testing sites (like localhost)</li>
+                    <li>Personal projects you're building</li>
+                    <li>Sites you visit daily that get false warnings</li>
+                  </ul>
+                </div>
+                
+                <div className="space-y-2">
+                  {(settings.ml_whitelist || []).map((domain, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg group hover:bg-slate-800/50 transition">
+                      <div className="flex items-center gap-3">
+                        <div className="text-green-400">✓</div>
+                        <code className="text-sm text-slate-300">{domain}</code>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const newWhitelist = settings.ml_whitelist?.filter((_, i) => i !== index)
+                          updateSetting('ml_whitelist', newWhitelist)
+                          setToastMessage(`🗑️ Removed ${domain} from trusted list`)
+                          setShowToast(true)
+                        }}
+                        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-sm transition px-3 py-1 rounded hover:bg-red-500/10"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 mt-4">
+                  <input
+                    type="text"
+                    placeholder="example.com (without https://)"
+                    id="whitelist-input"
+                    className="flex-1 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const input = e.currentTarget
+                        const domain = input.value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '')
+                        if (domain && !settings.ml_whitelist?.includes(domain)) {
+                          updateSetting('ml_whitelist', [...(settings.ml_whitelist || []), domain])
+                          input.value = ''
+                          setToastMessage(`✅ Added ${domain} to trusted list`)
+                          setShowToast(true)
+                        } else if (settings.ml_whitelist?.includes(domain)) {
+                          setToastMessage(`⚠️ ${domain} is already trusted`)
+                          setShowToast(true)
+                        }
+                      }
+                    }}
+                  />
+                  <Button 
+                    variant="primary"
+                    onClick={() => {
+                      const input = document.getElementById('whitelist-input') as HTMLInputElement
+                      const domain = input.value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '')
+                      if (domain && !settings.ml_whitelist?.includes(domain)) {
+                        updateSetting('ml_whitelist', [...(settings.ml_whitelist || []), domain])
+                        input.value = ''
+                        setToastMessage(`✅ Added ${domain} to trusted list`)
+                        setShowToast(true)
+                      }
+                    }}
                   >
-                    {level.charAt(0).toUpperCase() + level.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                    Add
+                  </Button>
+                </div>
 
-        {/* Notifications */}
-        <Card className="mb-6">
-          <CardContent>
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <Bell className="w-5 h-5 text-blue-400" />
-              Notifications
-            </h2>
-            <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.notifications_enabled}
-                  onChange={(e) => updateSetting('notifications_enabled', e.target.checked)}
-                  className="w-4 h-4 rounded"
-                />
-                <span className="text-slate-300">Enable notifications</span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.email_notifications}
-                  onChange={(e) => updateSetting('email_notifications', e.target.checked)}
-                  disabled={!settings.notifications_enabled}
-                  className="w-4 h-4 rounded disabled:opacity-50"
-                />
-                <span className={settings.notifications_enabled ? 'text-slate-300' : 'text-slate-500'}>
-                  Email notifications
-                </span>
-              </label>
-            </div>
-          </CardContent>
-        </Card>
+                <div className="text-xs text-slate-500 mt-2 italic">
+                  💡 Tip: Just enter the domain name, like "github.com" or "localhost"
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Privacy */}
-        <Card className="mb-6">
-          <CardContent>
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <Lock className="w-5 h-5 text-blue-400" />
-              Privacy
-            </h2>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.privacy_mode}
-                onChange={(e) => updateSetting('privacy_mode', e.target.checked)}
-                className="w-4 h-4 rounded"
-              />
-              <div>
-                <span className="text-slate-300 block">Privacy Mode</span>
-                <span className="text-xs text-slate-500">Don't store analysis history</span>
-              </div>
-            </label>
-          </CardContent>
-        </Card>
+            {/* How Good Is the Protection? */}
+            <Card>
+              <CardContent>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <Brain className="w-5 h-5 text-blue-400" />
+                    How Good Is This Protection?
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    Our system was trained by analyzing thousands of real phishing attempts
+                  </p>
+                </div>
 
-        {/* Data */}
-        <Card className="mb-6">
-          <CardContent>
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <HardDrive className="w-5 h-5 text-blue-400" />
-              Data & Export
-            </h2>
-            <div className="space-y-3">
-              <Button onClick={exportData} variant="primary" fullWidth>
-                📥 Export My Data
-              </Button>
-              <Button onClick={resetSettings} variant="secondary" fullWidth>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Reset to Defaults
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                {/* Simple stats */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-lg border border-green-500/30">
+                    <div className="text-3xl font-bold text-white mb-1">100%</div>
+                    <div className="text-sm text-slate-300">Success Rate</div>
+                    <div className="text-xs text-slate-500 mt-1">Never missed in testing</div>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-lg border border-blue-500/30">
+                    <div className="text-3xl font-bold text-white mb-1">1,775</div>
+                    <div className="text-sm text-slate-300">Real Examples</div>
+                    <div className="text-xs text-slate-500 mt-1">Learned from actual phishing</div>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg border border-purple-500/30">
+                    <div className="text-3xl font-bold text-white mb-1">61</div>
+                    <div className="text-sm text-slate-300">Checks Per URL</div>
+                    <div className="text-xs text-slate-500 mt-1">Looks at 61 different signals</div>
+                  </div>
+                </div>
 
-        <Button onClick={saveSettings} variant="success" size="lg" fullWidth>
-          Save Settings
-        </Button>
+                {/* What we look for */}
+                <div className="mt-4 p-4 bg-slate-800/30 rounded-lg">
+                  <div className="text-sm font-medium text-white mb-3">🔍 What We Check:</div>
+                  <div className="grid md:grid-cols-2 gap-3 text-xs text-slate-400">
+                    <div className="flex items-start gap-2">
+                      <div className="text-purple-400">✓</div>
+                      <div>
+                        <div className="text-white font-medium">Email Server Records</div>
+                        <div>Real companies have proper email setup</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <div className="text-purple-400">✓</div>
+                      <div>
+                        <div className="text-white font-medium">Website Age</div>
+                        <div>Suspicious sites are usually brand new</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <div className="text-purple-400">✓</div>
+                      <div>
+                        <div className="text-white font-medium">Redirects & Tricks</div>
+                        <div>Phishing sites often bounce you around</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <div className="text-purple-400">✓</div>
+                      <div>
+                        <div className="text-white font-medium">Security Certificates</div>
+                        <div>Checks if the site has valid HTTPS</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Plain language explanation */}
+                <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="text-sm text-blue-300 font-medium mb-1">💬 In Simple Terms:</div>
+                  <div className="text-xs text-slate-400 leading-relaxed">
+                    Think of our system like a security guard who's seen 1,775 different burglars. Now when someone suspicious shows up, 
+                    the guard recognizes the patterns - wrong ID, sketchy behavior, fake credentials. That's how we catch phishing!
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === 'notifications' && (
+          <div className="space-y-6">
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-blue-400" />
+                  Notification Preferences
+                </h3>
+                
+                <div className="space-y-3">
+                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
+                    <div>
+                      <div className="text-white font-medium">Push Notifications</div>
+                      <div className="text-sm text-slate-400">Get browser notifications</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.notifications}
+                      onChange={(e) => updateSetting('notifications', e.target.checked)}
+                      className="w-5 h-5 rounded"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
+                    <div>
+                      <div className="text-white font-medium">Email Alerts</div>
+                      <div className="text-sm text-slate-400">Receive email notifications</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.email_alerts}
+                      onChange={(e) => updateSetting('email_alerts', e.target.checked)}
+                      className="w-5 h-5 rounded"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
+                    <div>
+                      <div className="text-white font-medium">Daily Reminder</div>
+                      <div className="text-sm text-slate-400">Daily practice reminders</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.daily_reminder}
+                      onChange={(e) => updateSetting('daily_reminder', e.target.checked)}
+                      className="w-5 h-5 rounded"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
+                    <div>
+                      <div className="text-white font-medium">Weekly Report</div>
+                      <div className="text-sm text-slate-400">Weekly progress summary</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.weekly_report}
+                      onChange={(e) => updateSetting('weekly_report', e.target.checked)}
+                      className="w-5 h-5 rounded"
+                    />
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Alert variant="info">
+              💡 Notifications help you stay on track with your learning goals.
+            </Alert>
+          </div>
+        )}
+
+
+        {activeTab === 'data' && (
+          <div className="space-y-6">
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Database className="w-5 h-5 text-blue-400" />
+                  Data Management
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                    <div className="flex items-start gap-3 mb-3">
+                      <Download className="w-5 h-5 text-blue-400 mt-1" />
+                      <div>
+                        <div className="text-white font-medium mb-1">Export Your Data</div>
+                        <div className="text-sm text-slate-400">Download all settings and progress</div>
+                      </div>
+                    </div>
+                    <Button onClick={exportData} variant="primary" fullWidth>
+                      📥 Export Data
+                    </Button>
+                  </div>
+
+                  <div className="p-4 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                    <div className="flex items-start gap-3 mb-3">
+                      <RotateCcw className="w-5 h-5 text-orange-400 mt-1" />
+                      <div>
+                        <div className="text-white font-medium mb-1">Reset Settings</div>
+                        <div className="text-sm text-slate-400">Restore defaults</div>
+                      </div>
+                    </div>
+                    <Button onClick={resetSettings} variant="secondary" fullWidth>
+                      Reset to Defaults
+                    </Button>
+                  </div>
+
+                  <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                    <div className="flex items-start gap-3 mb-3">
+                      <Trash2 className="w-5 h-5 text-red-400 mt-1" />
+                      <div>
+                        <div className="text-white font-medium mb-1">Delete All Data</div>
+                        <div className="text-sm text-slate-400">Permanently remove all data</div>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        if (confirm('⚠️ This cannot be undone. Delete all progress, settings, and analyses?')) {
+                          resetAllData()
+                          window.location.reload()
+                        }
+                      }}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      🗑️ Delete All Data
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Alert variant="warning">
+              ⚠️ Data deletion is permanent. Export first if needed.
+            </Alert>
+          </div>
+        )}
+        
+        {showToast && (
+          <Toast
+            message={toastMessage}
+            type="success"
+            onClose={() => setShowToast(false)}
+          />
+        )}
       </div>
+
+      <LevelUpModal />
     </MainLayout>
+  )
+}
+
+interface LevelUpData {
+  level: number
+  title: string
+  unlockedFeatures: string[]
+}
+
+export function LevelUpModal() {
+  const [isOpen, setIsOpen] = useState(false)
+  const [levelUpData, setLevelUpData] = useState<LevelUpData | null>(null)
+
+  useEffect(() => {
+    const handleLevelUp = (event: Event) => {
+      const customEvent = event as CustomEvent
+      const data = customEvent.detail as LevelUpData
+      setLevelUpData(data)
+      setIsOpen(true)
+
+      // Auto-close after 5 seconds
+      const timer = setTimeout(() => {
+        setIsOpen(false)
+      }, 5000)
+
+      return () => clearTimeout(timer)
+    }
+
+    window.addEventListener('levelup', handleLevelUp)
+    return () => window.removeEventListener('levelup', handleLevelUp)
+  }, [])
+
+  return (
+    <AnimatePresence>
+      {isOpen && levelUpData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            className="bg-gradient-to-br from-purple-900 via-blue-900 to-cyan-900 rounded-2xl p-8 max-w-sm mx-4 border border-purple-500/50 shadow-2xl"
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setIsOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Celebration animation */}
+            <div className="text-center">
+              <motion.div
+                animate={{ rotate: 360, scale: [1, 1.2, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="text-6xl mb-4 inline-block"
+              >
+                🎉
+              </motion.div>
+
+              <h2 className="text-4xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+                <Award className="w-8 h-8 text-yellow-400" />
+                Level Up!
+                <Sparkles className="w-8 h-8 text-yellow-400" />
+              </h2>
+
+              <p className="text-6xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
+                Level {levelUpData.level}
+              </p>
+
+              <p className="text-2xl text-slate-200 mb-6">{levelUpData.title}</p>
+
+              {levelUpData.unlockedFeatures.length > 0 && (
+                <div className="bg-green-500/10 border border-green-500/30 p-3 rounded-lg">
+                  <p className="text-sm text-green-300">🎯 New features unlocked!</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {levelUpData.unlockedFeatures.join(', ')}
+                  </p>
+                </div>
+              )}
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsOpen(false)}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-8 rounded-lg transition"
+              >
+                Continue Learning 🚀
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   )
 }

@@ -5,7 +5,9 @@ import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
+import { Toast } from '../components/ui/Toast'
 import { AnalysisResult } from '../types'
+import { recordAnalysis } from '../utils/storage'
 
 export default function Analyze() {
   const [file, setFile] = useState<File | null>(null)
@@ -15,6 +17,7 @@ export default function Analyze() {
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [activeTab, setActiveTab] = useState<'screenshot' | 'email' | 'url'>('screenshot')
   const [error, setError] = useState<string | null>(null)
+  const [showToast, setShowToast] = useState(false)
 
   const analyzeScreenshot = async () => {
     if (!file) return
@@ -22,10 +25,19 @@ export default function Analyze() {
     setError(null)
     try {
       const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch('/analyze_screenshot', { method: 'POST', body: formData })
+      formData.append('image', file)
+      const res = await fetch('/api/analyze', { method: 'POST', body: formData })
       if (res.ok) {
-        setResult(await res.json())
+        const analysisResult = await res.json()
+        setResult(analysisResult)
+        // Record the analysis
+        recordAnalysis({
+          risk: analysisResult.risk,
+          type: 'screenshot',
+          findings: analysisResult.findings?.length || 0
+        })
+        // Show success notification
+        setShowToast(true)
       } else {
         setError('Failed to analyze screenshot')
       }
@@ -41,13 +53,19 @@ export default function Analyze() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/analyze_text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, url }),
-      })
+      const formData = new FormData()
+      formData.append('text', text)
+      formData.append('url', url)
+      const res = await fetch('/api/analyze', { method: 'POST', body: formData })
       if (res.ok) {
-        setResult(await res.json())
+        const analysisResult = await res.json()
+        setResult(analysisResult)
+        // Record the analysis
+        recordAnalysis({
+          risk: analysisResult.risk,
+          type: url ? 'url' : 'text',
+          findings: analysisResult.findings?.length || 0
+        })
       } else {
         setError('Failed to analyze')
       }
@@ -99,7 +117,7 @@ export default function Analyze() {
   }
 
   if (result) {
-    const risk = result.overall_risk_percent
+    const risk = result.risk
     const recommendations = getRecommendations(risk)
 
     return (
@@ -119,29 +137,36 @@ export default function Analyze() {
               </div>
             </div>
 
-            {/* Risk Breakdown */}
-            <div className="grid md:grid-cols-3 gap-4 mb-8">
-              <Card>
-                <div className="text-center">
-                  <p className="text-slate-400 mb-2">Visual Analysis</p>
-                  <p className="text-3xl font-bold text-blue-400">{result.model_risk_percent}%</p>
-                  <p className="text-xs text-slate-500 mt-1">Screenshot patterns</p>
-                </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-slate-400 mb-2">URL Risk</p>
-                  <p className="text-3xl font-bold text-orange-400">{result.url_risk_percent}%</p>
-                  <p className="text-xs text-slate-500 mt-1">{result.urls.length} URLs found</p>
-                </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-slate-400 mb-2">Text Phrases</p>
-                  <p className="text-3xl font-bold text-red-400">{result.phrase_risk_percent}%</p>
-                  <p className="text-xs text-slate-500 mt-1">{result.detected_phrases.length} phrases</p>
-                </div>
-              </Card>
+            {/* Findings */}
+            <div className="mb-8">
+              <h3 className="text-2xl font-bold text-white mb-4">Analysis Findings</h3>
+              <div className="space-y-3">
+                {result.findings?.map((finding, i) => (
+                  <Card key={i}>
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        finding.severity === 'high' ? 'bg-red-500/20' :
+                        finding.severity === 'med' ? 'bg-orange-500/20' :
+                        'bg-green-500/20'
+                      }`}>
+                        {finding.severity === 'high' ? '🚨' :
+                         finding.severity === 'med' ? '⚠️' : 'ℹ️'}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-white mb-1">{finding.label}</h4>
+                        <p className="text-slate-400 text-sm">{finding.detail}</p>
+                      </div>
+                      <Badge variant={
+                        finding.severity === 'high' ? 'error' :
+                        finding.severity === 'med' ? 'warning' :
+                        'success'
+                      }>
+                        {finding.severity.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))}
+              </div>
             </div>
 
             {/* Recommendations */}
@@ -152,48 +177,6 @@ export default function Analyze() {
                 ))}
               </ul>
             </Alert>
-
-            {/* Details */}
-            {result.detected_phrases.length > 0 && (
-              <Card className="mt-8">
-                <CardContent>
-                  <h3 className="font-bold text-white mb-4">🚩 Suspicious Phrases</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {result.detected_phrases.map((p, i) => (
-                      <Badge key={i} variant="danger">"{p}"</Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {result.urls.length > 0 && (
-              <Card className="mt-8">
-                <CardContent>
-                  <h3 className="font-bold text-white mb-4">🔗 URLs Detected</h3>
-                  <div className="space-y-3">
-                    {result.urls.map((u, i) => (
-                      <div key={i} className="p-3 bg-slate-900/50 rounded border border-slate-700">
-                        <p className="text-blue-400 text-sm break-all mb-2">{u.url}</p>
-                        <div className="flex items-center gap-2 mb-1">
-                          {u.suspicious ? (
-                            <AlertCircle className="w-4 h-4 text-red-400" />
-                          ) : (
-                            <CheckCircle className="w-4 h-4 text-green-400" />
-                          )}
-                          <span className="text-xs text-slate-400">
-                            Risk: {u.ml_risk_percent || Math.round(u.score * 100)}%
-                          </span>
-                        </div>
-                        {u.reasons.length > 0 && (
-                          <p className="text-xs text-slate-500">Issues: {u.reasons.join(', ')}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             <Button
               onClick={() => setResult(null)}
@@ -321,6 +304,14 @@ export default function Analyze() {
             </ul>
           </Alert>
         </div>
+        
+        {showToast && (
+          <Toast
+            message="✅ Analysis recorded! Check Analytics to see your progress."
+            type="success"
+            onClose={() => setShowToast(false)}
+          />
+        )}
       </div>
     </MainLayout>
   )

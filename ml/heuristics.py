@@ -2,6 +2,28 @@ from __future__ import annotations
 
 from typing import Dict, List, Any
 from urllib.parse import urlparse
+import re
+
+# Brand domain mappings for mismatch detection
+BRAND_DOMAINS = {
+    'paypal': ['paypal.com', 'paypal.co.uk', 'paypal.me'],
+    'amazon': ['amazon.com', 'amazon.co.uk', 'amazon.de', 'amazon.fr'],
+    'apple': ['apple.com', 'icloud.com', 'me.com'],
+    'microsoft': ['microsoft.com', 'live.com', 'outlook.com', 'office.com', 'xbox.com'],
+    'google': ['google.com', 'gmail.com', 'youtube.com'],
+    'facebook': ['facebook.com', 'fb.com', 'instagram.com'],
+    'netflix': ['netflix.com'],
+    'ebay': ['ebay.com', 'ebay.co.uk'],
+    'bank': ['lloyds.com', 'barclays.co.uk', 'hsbc.co.uk', 'natwest.com'],
+}
+
+# Expanded suspicious TLD list
+SUSPICIOUS_TLDS = [
+    '.tk', '.ml', '.ga', '.cf', '.gq',  # Free domains - heavily abused
+    '.xyz', '.top', '.work', '.click', '.link', '.date', '.review',  # Common phishing
+    '.icu', '.bid', '.stream', '.download', '.loan', '.racing',  # High-risk
+    '.info', '.cn', '.ru',  # Often used for spam
+]
 
 
 def heuristic_score(text: str, url: str) -> Dict[str, Any]:
@@ -11,6 +33,12 @@ def heuristic_score(text: str, url: str) -> Dict[str, Any]:
 
     score = 0
     findings: List[str] = []
+
+    # Brand mismatch detection (HIGH PRIORITY)
+    brand_mismatch, brand_name = _check_brand_mismatch(text_l, domain)
+    if brand_mismatch:
+        score += 35
+        findings.append(f"⚠️ Brand mismatch: Message mentions '{brand_name}' but URL domain doesn't match official {brand_name} domains.")
 
     # 1. Urgent / threatening language
     urgency_keywords = [
@@ -36,11 +64,11 @@ def heuristic_score(text: str, url: str) -> Dict[str, Any]:
         score += 20
         findings.append("Login/verification language combined with a clickable URL.")
 
-    # 4. Risky TLDs
-    bad_tlds = [".xyz", ".top", ".icu", ".bid", ".click", ".info", ".cn", ".ru"]
-    if domain and any(domain.endswith(t) for t in bad_tlds):
-        score += 15
-        findings.append(f"Domain '{domain}' uses a high-risk top-level domain.")
+    # 4. Risky TLDs (expanded list)
+    if domain and any(domain.endswith(t) for t in SUSPICIOUS_TLDS):
+        tld = next((t for t in SUSPICIOUS_TLDS if domain.endswith(t)), '')
+        score += 20
+        findings.append(f"⚠️ Suspicious domain extension: '{domain}' uses high-risk TLD '{tld}' (commonly used for phishing).")
 
     # 5. Many URL parameters (obfuscation)
     if url_l.count("&") >= 5:
@@ -71,3 +99,18 @@ def heuristic_score(text: str, url: str) -> Dict[str, Any]:
         "severity": severity,
         "findings": findings,
     }
+
+
+def _check_brand_mismatch(text: str, domain: str) -> tuple[bool, str]:
+    """Check if text mentions a brand but URL domain doesn't match official domains."""
+    if not domain:
+        return False, ""
+    
+    for brand, legit_domains in BRAND_DOMAINS.items():
+        # Check if brand mentioned in text
+        if brand in text or brand.replace(' ', '') in text:
+            # Check if domain matches any legitimate domain for that brand
+            if not any(legit in domain for legit in legit_domains):
+                return True, brand
+    
+    return False, ""

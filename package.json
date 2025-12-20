@@ -1,9 +1,14 @@
 {
   "dependencies": {
     "framer-motion": "^12.23.24",
+    "lucide-react": "^0.556.0",
     "react-router-dom": "^7.10.1"
   },
   "devDependencies": {
-    "arff": "^0.1.1"
+    "@types/node": "^24.10.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "arff": "^0.1.1",
+    "vite": "^7.2.7"
   }
 }
