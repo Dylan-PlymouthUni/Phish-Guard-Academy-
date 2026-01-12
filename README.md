@@ -16,7 +16,7 @@ PhishGuard Academy is a comprehensive, interactive web application designed to h
 
 ### Interactive Learning Hub
 - **7 Comprehensive Lessons** covering everything from phishing basics to incident response
-- Topics include:
+- Topics include: 
   - Phishing 101: The Basics
   - Red Flags and Warning Signs
   - Advanced URL Analysis
@@ -271,22 +271,36 @@ npm run build        # Build optimized frontend
 
 ## Machine Learning Details
 
+### Training Data Sources
+- **PhishTank**: Verified phishing URLs from community-driven database
+- **OpenPhish**: Real-time phishing intelligence feed
+- **URLhaus**: Malware and phishing URL collection
+- **Curated legitimate URLs**: From trusted domains and organizations
+
 ### Features Extracted
 - URL length and complexity
-- Domain reputation
-- Suspicious keywords
-- HTTPS usage
-- Subdomain count
+- Domain reputation and age
+- Suspicious keywords and patterns
+- HTTPS usage and certificate validity
+- Subdomain count and structure
 - Special character ratio
 - Shortened URL detection
-- IP address usage
+- IP address usage in URLs
 - Visual similarity patterns (screenshots)
 
 ### Model Performance
-- **Accuracy**: Approximately 98.7% on test data
-- **False Positive Rate**: Less than 2%
-- **Detection Rate**: High for common phishing patterns
-- Continuously improved with new data
+- **Training Dataset**: 1,775+ real-world phishing URLs balanced with legitimate samples
+- **Expected Accuracy**: 95%+ on balanced test sets
+- **Model Type**: Random Forest Classifier with 61 engineered features
+- **False Positive Rate**: Target of less than 5%
+- **Detection Capability**: Strong performance on common phishing patterns
+- **Continuous Improvement**: Model updated with new threat data
+
+### Model Architecture
+- Random Forest ensemble with hyperparameter tuning
+- GridSearchCV for optimal parameter selection
+- Cross-validation for robust performance estimates
+- Feature importance analysis for interpretability
 
 ---
 
@@ -328,8 +342,20 @@ This project is part of a dissertation for COMP3000 at the University of Plymout
 
 - University of Plymouth COMP3000 Module
 - FastAPI and React communities
-- Open-source phishing datasets
+- PhishTank, OpenPhish, and URLhaus for threat intelligence data
+- Open-source phishing research community
 - All contributors and testers
+
+---
+
+## Future Enhancements
+
+- Real-time phishing feed integration
+- Browser extension for on-the-fly URL checking
+- Mobile application version
+- Advanced deep learning models (CNN for screenshot analysis)
+- Community-driven threat reporting
+- API access for third-party integrations
 
 ---
 
