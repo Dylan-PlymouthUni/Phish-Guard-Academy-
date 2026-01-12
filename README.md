@@ -1,17 +1,21 @@
- A Phishing Detection and Education Platform for my disseratation project, COMP3000 at the university of plymouth.
+# PhishGuard Academy
 
-PhishGuard Academy is a comprehensive, interactive web application designed to help users identify, analyze, and protect themselves from phishing attacks. Built with cutting-edge machine learning and an engaging user experience, it serves as both an educational tool and a practical threat analyzer.
+A Phishing Detection and Education Platform for my dissertation project, COMP3000 at the University of Plymouth.
+
+PhishGuard Academy is a comprehensive, interactive web application designed to help users identify, analyze, and protect themselves from phishing attacks. Built with cutting-edge machine learning and an engaging gamified interface, it provides real-time threat analysis and hands-on cybersecurity education.
+
+---
 
 ## Key Features
 
 ### Multi-Modal Threat Analysis
-- Screenshot Analysis: Upload and analyze suspicious website screenshots using computer vision
-- Email Content Analysis: Scan email text for phishing indicators and social engineering tactics
-- URL Verification: Check URLs for typosquatting, suspicious domains, and malicious patterns
-- Real-time Risk Scoring: Get instant threat assessments with detailed breakdowns
+- **Screenshot Analysis**: Upload and analyze suspicious website screenshots using computer vision
+- **Email Content Analysis**: Scan email text for phishing indicators and social engineering tactics
+- **URL Verification**: Check URLs for typosquatting, suspicious domains, and malicious patterns
+- **Real-time Risk Scoring**: Get instant threat assessments with detailed breakdowns
 
 ### Interactive Learning Hub
-- 7 Comprehensive Lessons covering everything from phishing basics to incident response
+- **7 Comprehensive Lessons** covering everything from phishing basics to incident response
 - Topics include:
   - Phishing 101: The Basics
   - Red Flags and Warning Signs
@@ -24,12 +28,12 @@ PhishGuard Academy is a comprehensive, interactive web application designed to h
 - Markdown-formatted content with examples and exercises
 
 ### Interactive Challenges
-- Phishing Basics (Easy) - 3 questions, 50 points
-- URL Detective (Medium) - 4 questions, 100 points
-- Social Engineering Tactics (Medium) - 5 questions, 150 points
-- Email Header Analysis (Hard) - 4 questions, 200 points
-- Real-World Scenarios (Hard) - 6 questions, 250 points
-- Mobile Phishing (Medium) - 3 questions, 120 points
+- **Phishing Basics** (Easy) - 3 questions, 50 points
+- **URL Detective** (Medium) - 4 questions, 100 points
+- **Social Engineering Tactics** (Medium) - 5 questions, 150 points
+- **Email Header Analysis** (Hard) - 4 questions, 200 points
+- **Real-World Scenarios** (Hard) - 6 questions, 250 points
+- **Mobile Phishing** (Medium) - 3 questions, 120 points
 - Timed challenges with detailed explanations
 - Scoring system with passing thresholds
 - Performance analytics and statistics
@@ -75,6 +79,8 @@ PhishGuard Academy is a comprehensive, interactive web application designed to h
 - Dark mode optimized
 - Accessible and intuitive interface
 
+---
+
 ## Technology Stack
 
 ### Frontend
@@ -98,9 +104,11 @@ PhishGuard Academy is a comprehensive, interactive web application designed to h
 - Heuristic-based analysis
 - Pattern recognition for visual phishing indicators
 
+---
+
 ## Project Structure
 
-\`\`\`
+```
 Phish-Guard-Academy/
 ├── phish-guard-academy/          # React frontend
 │   ├── src/
@@ -131,7 +139,9 @@ Phish-Guard-Academy/
 │   └── model/                    # Trained ML models
 ├── data/                         # Training data and user data
 └── server/                       # Production server setup
-\`\`\`
+```
+
+---
 
 ## Installation and Setup
 
@@ -142,17 +152,17 @@ Phish-Guard-Academy/
 
 ### Frontend Setup
 
-\`\`\`bash
+```bash
 cd phish-guard-academy
 npm install
 npm run dev
-\`\`\`
+```
 
 Frontend will run on http://localhost:5173
 
 ### Backend Setup
 
-\`\`\`bash
+```bash
 # Install Python dependencies
 pip install -r requirements.txt
 
@@ -162,9 +172,11 @@ python train_model_advanced.py
 # Start the API server
 cd ml
 uvicorn api:app --reload --host 0.0.0.0 --port 8000
-\`\`\`
+```
 
 Backend API will run on http://localhost:8000
+
+---
 
 ## Usage Guide
 
@@ -203,16 +215,18 @@ Backend API will run on http://localhost:8000
 - View your improvement over time
 - Export reports (coming soon)
 
+---
+
 ## Educational Content
 
 ### Lessons Covered
-1. Phishing 101 - Understanding the basics (50 points)
-2. Red Flags and Warning Signs - Spotting indicators (75 points)
-3. Advanced URL Analysis - Dissecting malicious URLs (100 points)
-4. Social Engineering Tactics - Understanding manipulation (120 points)
-5. Email Security Best Practices - Technical deep dive (150 points)
-6. Mobile Phishing Defense - Smartphone security (100 points)
-7. Phishing Incident Response - What to do when compromised (130 points)
+1. **Phishing 101** - Understanding the basics (50 points)
+2. **Red Flags and Warning Signs** - Spotting indicators (75 points)
+3. **Advanced URL Analysis** - Dissecting malicious URLs (100 points)
+4. **Social Engineering Tactics** - Understanding manipulation (120 points)
+5. **Email Security Best Practices** - Technical deep dive (150 points)
+6. **Mobile Phishing Defense** - Smartphone security (100 points)
+7. **Phishing Incident Response** - What to do when compromised (130 points)
 
 ### Challenge Topics
 - Basic phishing identification
@@ -222,32 +236,38 @@ Backend API will run on http://localhost:8000
 - Real-world scenario response
 - Mobile threat detection
 
+---
+
 ## Security and Privacy
 
-- No data storage: Analyses are performed in real-time and not stored on servers
-- Privacy-focused: No user tracking or personal data collection
-- Safe sandbox: Practice environment is completely isolated
-- Local storage only: User progress saved locally in browser
-- No backend authentication required for basic features
+- **No data storage**: Analyses are performed in real-time and not stored on servers
+- **Privacy-focused**: No user tracking or personal data collection
+- **Safe sandbox**: Practice environment is completely isolated
+- **Local storage only**: User progress saved locally in browser
+- **No backend authentication required** for basic features
+
+---
 
 ## Deployment
 
 ### Development
-\`\`\`bash
+```bash
 npm run dev          # Frontend development server
 python -m uvicorn ml.api:app --reload  # Backend API
-\`\`\`
+```
 
 ### Production Build
-\`\`\`bash
+```bash
 npm run build        # Build optimized frontend
 # Deploy to Fly.io, Render, or any static hosting
-\`\`\`
+```
 
 ### Deployment Platforms
-- Frontend: Vercel, Netlify, GitHub Pages
-- Backend: Fly.io, Render, Railway, Heroku
-- Database: PostgreSQL, MongoDB (for user accounts in future versions)
+- **Frontend**: Vercel, Netlify, GitHub Pages
+- **Backend**: Fly.io, Render, Railway, Heroku
+- **Database**: PostgreSQL, MongoDB (for user accounts in future versions)
+
+---
 
 ## Machine Learning Details
 
@@ -263,18 +283,54 @@ npm run build        # Build optimized frontend
 - Visual similarity patterns (screenshots)
 
 ### Model Performance
-- Accuracy: Approximately 98.7% on test data
-- False Positive Rate: Less than 2%
-- Detection Rate: High for common phishing patterns
+- **Accuracy**: Approximately 98.7% on test data
+- **False Positive Rate**: Less than 2%
+- **Detection Rate**: High for common phishing patterns
 - Continuously improved with new data
+
+---
 
 ## Design Philosophy
 
-- User-First: Intuitive navigation and clear feedback
-- Interactive: Engaging, game-like learning experience
-- Visual: Modern design with gradients and animations
-- Accessible: Works on all devices and screen sizes
-- Educational: Every feature teaches something valuable
+- **User-First**: Intuitive navigation and clear feedback
+- **Interactive**: Engaging, game-like learning experience
+- **Visual**: Modern design with gradients and animations
+- **Accessible**: Works on all devices and screen sizes
+- **Educational**: Every feature teaches something valuable
 
+---
 
+## Contributing
 
+Contributions, issues, and feature requests are welcome! This is an academic project, but feedback is always appreciated.
+
+1. Fork the project
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## License
+
+This project is part of a dissertation for COMP3000 at the University of Plymouth.
+
+---
+
+## Author
+
+**Dylan** - [@Dylan-PlymouthUni](https://github.com/Dylan-PlymouthUni)
+
+---
+
+## Acknowledgments
+
+- University of Plymouth COMP3000 Module
+- FastAPI and React communities
+- Open-source phishing datasets
+- All contributors and testers
+
+---
+
+**Disclaimer**: This application is for educational purposes only. While the machine learning models are trained on real data, always exercise caution with suspicious emails and websites in real-world scenarios.
