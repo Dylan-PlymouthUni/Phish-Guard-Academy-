@@ -1,5 +1,9 @@
-// API endpoint
-const API_URL = 'http://localhost:8000'
+// Get API URL from storage or use default
+let API_URL = 'http://localhost:8000'
+
+chrome.storage.sync.get({ apiUrl: 'http://localhost:8000' }, (items) => {
+  API_URL = items.apiUrl
+})
 
 // Get current tab URL
 document.getElementById('checkCurrentPage').addEventListener('click', async () => {
@@ -12,7 +16,9 @@ document.getElementById('checkCurrentPage').addEventListener('click', async () =
 
 // Open dashboard
 document.getElementById('openDashboard').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'http://localhost:5173/app/dashboard' })
+  chrome.storage.sync.get({ dashboardUrl: 'http://localhost:5173/app/dashboard' }, (items) => {
+    chrome.tabs.create({ url: items.dashboardUrl })
+  })
 })
 
 // Analyze button click
@@ -46,7 +52,7 @@ async function analyzeURL(url) {
   analyzeBtn.disabled = true
   
   try {
-    const response = await fetch(`${API_URL}/analyze/url`, {
+    const response = await fetch(`${API_URL}/api/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

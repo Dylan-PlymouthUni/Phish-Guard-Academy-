@@ -1,0 +1,13 @@
+nohup: ignoring input
+INFO:     Will watch for changes in these directories: ['/workspaces/Phish-Guard-Academy-']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [10514] using WatchFiles
+WARNING:root:Advanced URL analysis libraries not installed. Run: pip install -r requirements-ml.txt
+WARNING:root:Transformers not installed. Run: pip install -r requirements-ml.txt
+WARNING:root:PyTorch not installed. Run: pip install -r requirements-ml.txt
+WARNING:root:EasyOCR not installed. Using pytesseract fallback
+INFO:     Started server process [10610]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:60844 - "GET /health HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:37378 - "GET /api/auth/health HTTP/1.1" 404 Not Found

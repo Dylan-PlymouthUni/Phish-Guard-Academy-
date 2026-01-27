@@ -8,6 +8,7 @@ import { Badge } from '../components/ui/Badge'
 import { Toast } from '../components/ui/Toast'
 import { AnalysisResult } from '../types'
 import { recordAnalysis } from '../utils/storage'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Analyze() {
   const [file, setFile] = useState<File | null>(null)
@@ -18,6 +19,7 @@ export default function Analyze() {
   const [activeTab, setActiveTab] = useState<'screenshot' | 'email' | 'url'>('screenshot')
   const [error, setError] = useState<string | null>(null)
   const [showToast, setShowToast] = useState(false)
+  const { token, refreshUser } = useAuth()
 
   const analyzeScreenshot = async () => {
     if (!file) return
@@ -26,7 +28,10 @@ export default function Analyze() {
     try {
       const formData = new FormData()
       formData.append('image', file)
-      const res = await fetch('/api/analyze', { method: 'POST', body: formData })
+      const res = await fetch('/api/analyze', { 
+        method: 'POST',
+        body: formData
+      })
       if (res.ok) {
         const analysisResult = await res.json()
         setResult(analysisResult)
@@ -36,6 +41,8 @@ export default function Analyze() {
           type: 'screenshot',
           findings: analysisResult.findings?.length || 0
         })
+        // Refresh user stats to get updated XP
+        await refreshUser()
         // Show success notification
         setShowToast(true)
       } else {
@@ -56,7 +63,10 @@ export default function Analyze() {
       const formData = new FormData()
       formData.append('text', text)
       formData.append('url', url)
-      const res = await fetch('/api/analyze', { method: 'POST', body: formData })
+      const res = await fetch('/api/analyze', { 
+        method: 'POST',
+        body: formData
+      })
       if (res.ok) {
         const analysisResult = await res.json()
         setResult(analysisResult)
@@ -66,6 +76,8 @@ export default function Analyze() {
           type: url ? 'url' : 'text',
           findings: analysisResult.findings?.length || 0
         })
+        // Refresh user stats to get updated XP
+        await refreshUser()
       } else {
         setError('Failed to analyze')
       }
@@ -201,6 +213,12 @@ export default function Analyze() {
           </div>
 
           {error && <Alert variant="error" title="Error">{error}</Alert>}
+
+          <Alert variant="info" className="mb-6" title="Reminder">
+            <p className="text-sm text-slate-200">
+              Our analysis blends machine learning and threat intelligence, but it can still be wrong. Double-check sensitive requests, and follow your organization&apos;s policies even when results look safe.
+            </p>
+          </Alert>
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-slate-700">

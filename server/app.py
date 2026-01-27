@@ -1,13 +1,15 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import re
 import sys
 import os
+import json
 from PIL import Image
 import io
 import logging
+from ml.auth import verify_token
 
 # Add ml directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -17,11 +19,47 @@ from ml.learning import LESSONS
 from ml.ensemble import PhishingEnsemble
 from ml.text_classifier import TextPhishingClassifier
 from ml.visual_classifier import VisualPhishingDetector
+from ml.auth_api import router as auth_router, get_current_user
+from ml.analysis_api import router as analysis_router
+from ml.email_analysis_api import router as email_router
+from ml.learning_api import router as learning_router
+from ml.mfa_api import router as mfa_router
+from ml.leaderboard_api import router as leaderboard_router
+from ml.db_models import init_db, SessionLocal, DBAnalysis, DBChallengeAttempt, DBLessonProgress
+from ml.swagger_config import custom_openapi
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from ml.limiter import limiter
 
 logger = logging.getLogger(__name__)
 
+# Initialize database
+init_db()
+
 # Initialize ML models (lazy load)
 _ensemble = None
+
+
+def get_optional_user(request: Request):
+    """Return authenticated user if Authorization bearer token is present; otherwise None."""
+    auth_header = request.headers.get("Authorization") if request else None
+    if not auth_header:
+        return None
+    parts = auth_header.split(" ")
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    token = parts[1]
+    token_data = verify_token(token)
+    if not token_data:
+        return None
+    db = SessionLocal()
+    try:
+        from ml.persistence import get_repositories
+        repos = get_repositories(db)
+        return repos["users"].get_by_id(token_data.user_id)
+    finally:
+        db.close()
 
 def get_ensemble() -> PhishingEnsemble:
     """Get or initialize ensemble model"""
@@ -31,7 +69,39 @@ def get_ensemble() -> PhishingEnsemble:
         _ensemble = PhishingEnsemble()
     return _ensemble
 
-app = FastAPI(title="PhishGuard API", version="0.1")
+app = FastAPI(
+    title="PhishGuard Academy API",
+    version="1.0.0",
+    description="Comprehensive phishing detection and cybersecurity education platform",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
+)
+
+# Rate limiting middleware
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Add basic security headers to every response."""
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
+
+# Include routers
+app.include_router(auth_router)
+app.include_router(analysis_router)
+app.include_router(email_router)
+app.include_router(learning_router)
+app.include_router(mfa_router)
+app.include_router(leaderboard_router)
 
 # CORS for Vite dev server
 app.add_middleware(
@@ -41,6 +111,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Configure Swagger/OpenAPI
+app.openapi = lambda: custom_openapi(app)
 
 class Finding(BaseModel):
     type: str
@@ -64,12 +137,25 @@ def score_from_signals(has_url: bool, urgent: bool, lookalike: bool) -> int:
     if lookalike: base += 30
     return max(5, min(98, base))
 
+@app.get("/")
+def root():
+    """Root endpoint - API info"""
+    return {
+        "service": "PhishGuard Academy API",
+        "version": "1.0.0",
+        "status": "online",
+        "docs": "/api/docs"
+    }
+
 @app.get("/api/health")
-def health():
+@limiter.limit("60/minute")
+def health(request: Request):
     return {"ok": True}
 
 @app.post("/api/analyze", response_model=AnalysisResponse)
+@limiter.limit("30/minute")
 async def analyze(
+    request: Request,
     text: Optional[str] = Form(default=""),
     url: Optional[str] = Form(default=""),
     image: Optional[UploadFile] = File(default=None),
@@ -169,7 +255,34 @@ async def analyze(
                     ))
         
         risk = int(result.risk_score)
-        
+
+        # Persist analysis if user is authenticated
+        user = get_optional_user(request)
+        if user:
+            db = SessionLocal()
+            try:
+                from ml.persistence import get_repositories
+                repos = get_repositories(db)
+                db_user = repos["users"].get_by_id(user.id)
+                if db_user:
+                    analysis_record = DBAnalysis(
+                        user_id=db_user.id,
+                        analysis_type=("multi" if url and text and pil_image else "url" if url else "text" if text else "screenshot"),
+                        input_text=text or "",
+                        input_url=url or "",
+                        risk_score=risk,
+                        findings=json.dumps([f.__dict__ for f in findings])
+                    )
+                    db.add(analysis_record)
+                    db_user.xp = (db_user.xp or 0) + 10
+                    db_user.level = (db_user.xp // 1000) + 1
+                    db.commit()
+            except Exception as db_err:
+                db.rollback()
+                logger.error(f"Failed to persist analysis: {db_err}")
+            finally:
+                db.close()
+
         return AnalysisResponse(
             risk=risk,
             findings=findings if findings else [Finding(
@@ -223,133 +336,9 @@ async def analyze(
         risk = score_from_signals(has_url, urgent, lookalike)
         return AnalysisResponse(risk=risk, findings=findings, boxes=[])
 
-# Challenges endpoints
-@app.get("/api/challenges")
-def get_challenges():
-    return [
-        {
-            "id": c["id"],
-            "title": c["title"],
-            "description": c["description"],
-            "difficulty": c["difficulty"],
-            "points": c.get("points_reward", 100),
-            "time_limit": c.get("time_limit", 600),
-            "questions": [
-                {
-                    "id": q["id"],
-                    "question": q["question"],
-                    "type": q.get("type", "multiple_choice"),
-                    "options": q.get("options", [])
-                }
-                for q in c["questions"]
-            ]
-        }
-        for c in CHALLENGES
-    ]
-
-@app.post("/api/submit-challenge")
-async def submit_challenge(data: Dict[str, Any]):
-    challenge_id = data.get("challenge_id")
-    answers = data.get("answers", {})
-    
-    challenge = next((c for c in CHALLENGES if c["id"] == challenge_id), None)
-    if not challenge:
-        return {"error": "Challenge not found"}
-    
-    correct = 0
-    total = len(challenge["questions"])
-    feedback = []
-    
-    for q in challenge["questions"]:
-        user_answer = answers.get(q["id"], "")
-        is_correct = user_answer.lower().strip() == q["correct_answer"].lower().strip()
-        if is_correct:
-            correct += 1
-        feedback.append({
-            "question_id": q["id"],
-            "correct": is_correct,
-            "user_answer": user_answer,
-            "correct_answer": q["correct_answer"],
-            "explanation": q.get("explanation", "")
-        })
-    
-    score = (correct / total) * 100 if total > 0 else 0
-    points_reward = challenge.get("points_reward", 100)
-    earned_points = int((correct / total) * points_reward) if total > 0 else 0
-    
-    return {
-        "score": score,
-        "correct": correct,
-        "total": total,
-        "points_earned": earned_points,
-        "feedback": feedback,
-        "passed": score >= challenge.get("passing_score", 70)
-    }
-
-# Learning endpoints
-@app.get("/api/lessons")
-def get_lessons():
-    return [
-        {
-            "id": lesson["id"],
-            "title": lesson["title"],
-            "description": lesson["description"],
-            "duration": lesson.get("duration", 10),
-            "difficulty": lesson.get("difficulty", "beginner"),
-            "points": lesson.get("points_reward", 50),
-            "content": lesson.get("content", "")
-        }
-        for lesson in LESSONS
-    ]
-
-@app.get("/api/progress")
-def get_progress():
-    # Mock progress data
-    return {
-        "completed_lessons": [],
-        "completed_challenges": [],
-        "total_points": 0,
-        "streak_days": 0,
-        "lessons_completed": 0,
-        "challenges_passed": 0,
-        "achievements": [],
-        "level": 1,
-        "experience": 0
-    }
-
-@app.post("/api/complete-lesson/{lesson_id}")
-async def complete_lesson(lesson_id: str):
-    lesson = next((l for l in LESSONS if l["id"] == lesson_id), None)
-    if not lesson:
-        return {"error": "Lesson not found"}
-    
-    return {
-        "success": True,
-        "points_earned": lesson.get("points_reward", 50),
-        "lesson_id": lesson_id
-    }
-
-# Analytics endpoints
-@app.get("/api/analytics/summary")
-def get_analytics_summary():
-    return {
-        "total_analyses": 0,
-        "phishing_detected": 0,
-        "average_risk": 0,
-        "last_analysis": None
-    }
-
-@app.get("/api/analytics/daily")
-def get_daily_analytics(days: int = 30):
-    return {"daily_stats": []}
-
-@app.get("/api/analytics/distribution")
-def get_risk_distribution():
-    return {
-        "low": 0,
-        "medium": 0,
-        "high": 0
-    }
+# NOTE: Challenges, lessons, and analytics endpoints are now handled by routers
+# (ml/learning_api.py and ml/analysis_api.py) to avoid duplication and ensure
+# persistence logic is centralized
 
 # Settings endpoints
 @app.get("/api/settings")

@@ -16,10 +16,10 @@ export function Button({
   ...props
 }: ButtonProps) {
   const variants = {
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-    secondary: 'bg-slate-700 hover:bg-slate-600 text-slate-100',
-    danger: 'bg-red-600 hover:bg-red-700 text-white',
-    success: 'bg-green-600 hover:bg-green-700 text-white',
+    primary: 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-blue-500/25',
+    secondary: 'bg-slate-700 hover:bg-slate-600 text-slate-100 shadow-md hover:shadow-slate-500/15',
+    danger: 'bg-red-600 hover:bg-red-700 text-white shadow-lg hover:shadow-red-500/25',
+    success: 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-green-500/25',
   }
 
   const sizes = {
@@ -32,11 +32,11 @@ export function Button({
     <button
       disabled={disabled}
       className={`
-        font-semibold rounded-lg transition
+        font-semibold rounded-lg transition duration-200
         ${variants[variant]}
         ${sizes[size]}
         ${fullWidth ? 'w-full' : ''}
-        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
         ${className}
       `}
       {...props}

@@ -4,10 +4,11 @@ import { MainLayout } from '../components/layout/MainLayout'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { motion } from 'framer-motion'
-import { getProgress, getAnalytics } from '../utils/storage'
+import { useAuth } from '../contexts/AuthContext'
 
 interface LeaderboardEntry {
   rank: number
+  user_id: string
   name: string
   points: number
   level: number
@@ -21,40 +22,76 @@ export default function Leaderboard() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [currentUser, setCurrentUser] = useState<LeaderboardEntry | null>(null)
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'all-time'>('all-time')
+  const { token, user } = useAuth()
+  const API_URL = (import.meta as any)?.env?.VITE_API_URL ?? ''
 
   useEffect(() => {
     loadLeaderboard()
-  }, [timeframe])
+  }, [timeframe, token])
 
-  const loadLeaderboard = () => {
-    // Get current user progress
-    const progress = getProgress()
-    const analytics = getAnalytics()
+  // Refresh data when component becomes visible or receives focus
+  useEffect(() => {
+    const onVis = () => { if (!document.hidden) loadLeaderboard() }
+    const onFocus = () => loadLeaderboard()
     
-    // Mock leaderboard data (in production, this would come from backend)
-    const mockLeaderboard: LeaderboardEntry[] = [
-      { rank: 1, name: 'CyberNinja', points: 15420, level: 28, streak: 45, analyses: 523, achievements: 28, avatar: '🥷' },
-      { rank: 2, name: 'PhishHunter', points: 13890, level: 25, streak: 38, analyses: 487, achievements: 25, avatar: '🎯' },
-      { rank: 3, name: 'SecurityPro', points: 12650, level: 23, streak: 34, analyses: 445, achievements: 23, avatar: '🛡️' },
-      { rank: 4, name: 'ThreatSeeker', points: 11200, level: 21, streak: 29, analyses: 401, achievements: 21, avatar: '🔍' },
-      { rank: 5, name: 'CodeGuardian', points: 10850, level: 20, streak: 27, analyses: 389, achievements: 19, avatar: '⚔️' },
-      { rank: 6, name: 'DataDefender', points: 9950, level: 18, streak: 25, analyses: 356, achievements: 18, avatar: '🦸' },
-      { rank: 7, name: 'NetSentinel', points: 9420, level: 17, streak: 22, analyses: 334, achievements: 17, avatar: '👁️' },
-      { rank: 8, name: 'InfoWarrior', points: 8890, level: 16, streak: 20, analyses: 312, achievements: 15, avatar: '⚡' },
-      { rank: 9, name: 'CyberScout', points: 8320, level: 15, streak: 18, analyses: 289, achievements: 14, avatar: '🎖️' },
-      { rank: 10, name: 'You', points: progress.total_points, level: progress.level, streak: progress.streak || 0, analyses: analytics.total_analyses, achievements: (progress.achievements?.length || 0), avatar: '😎' },
-    ]
-
-    // Sort by points
-    mockLeaderboard.sort((a, b) => b.points - a.points)
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', onFocus)
     
-    // Update ranks
-    mockLeaderboard.forEach((entry, index) => {
-      entry.rank = index + 1
-    })
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
 
-    setLeaderboard(mockLeaderboard)
-    setCurrentUser(mockLeaderboard.find(e => e.name === 'You') || null)
+  const loadLeaderboard = async () => {
+    try {
+      if (!token) {
+        setLeaderboard([])
+        setCurrentUser(null)
+        return
+      }
+      const res = await fetch(`${API_URL}/api/leaderboard`, {
+        headers: { 
+          Authorization: `Bearer ${token}`
+        }
+      })
+      if (!res.ok) throw new Error('Failed to load leaderboard')
+      const data = await res.json()
+      const entries: LeaderboardEntry[] = (data.leaderboard || []).map((e: any) => ({
+        rank: e.rank,
+        user_id: e.user_id,
+        name: e.name,
+        points: e.xp,
+        level: e.level,
+        streak: e.streak || 0,
+        analyses: e.analyses_count || 0,
+        achievements: e.achievements_count || 0,
+        avatar: '😎'
+      }))
+      setLeaderboard(entries)
+      
+      // Sync user stats if returned
+      if (data.user_stats && user) {
+        const updated = { ...user, xp: data.user_stats.xp, level: data.user_stats.level, streak: data.user_stats.streak }
+        localStorage.setItem('auth_user', JSON.stringify(updated))
+      }
+
+      // current user: either part of top, or provided separately
+      const me = entries.find(en => user && en.user_id === user.user_id) || (data.current_user ? {
+        rank: data.current_user.rank,
+        user_id: data.current_user.user_id,
+        name: data.current_user.name,
+        points: data.current_user.xp,
+        level: data.current_user.level,
+        streak: data.current_user.streak || 0,
+        analyses: data.current_user.analyses_count || 0,
+        achievements: data.current_user.achievements_count || 0,
+        avatar: '😎'
+      } as LeaderboardEntry : null)
+      setCurrentUser(me || null)
+    } catch (err) {
+      console.error('Leaderboard error', err)
+    }
   }
 
   const getRankColor = (rank: number) => {
@@ -148,7 +185,7 @@ export default function Leaderboard() {
             <div className="overflow-hidden">
               {leaderboard.map((entry, index) => (
                 <motion.div
-                  key={entry.name}
+                  key={entry.user_id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05 }}

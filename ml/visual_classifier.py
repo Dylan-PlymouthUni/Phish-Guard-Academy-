@@ -22,6 +22,7 @@ try:
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
+    torch = None  # Optional dependency
     logging.warning("PyTorch not installed. Run: pip install -r requirements-ml.txt")
 
 try:
@@ -43,7 +44,10 @@ class VisualPhishingDetector:
         use_gpu: bool = True
     ):
         self.model_name = model_name
-        self.device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
+        if use_gpu and TORCH_AVAILABLE and torch and torch.cuda.is_available():
+            self.device = "cuda"
+        else:
+            self.device = "cpu"
         
         self.model: Optional[nn.Module] = None
         self.transform: Optional[transforms.Compose] = None

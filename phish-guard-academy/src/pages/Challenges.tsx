@@ -1,4 +1,4 @@
-import { Target, Clock, Trophy, CheckCircle, XCircle } from 'lucide-react'
+import { Target, Clock, Trophy, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
 import { Card, CardContent } from '../components/ui/Card'
@@ -10,9 +10,57 @@ import { useApi } from '../hooks/useApi'
 import { SkeletonCard } from '../components/ui/Skeleton'
 import { Challenge } from '../types'
 import { completeChallenge, getProgress } from '../utils/storage'
+import { useAuth } from '../contexts/AuthContext'
+
+const FALLBACK_CHALLENGES: Challenge[] = [
+  {
+    id: 'url-spotting-1',
+    title: 'Spot the Phishy URL',
+    description: 'Decide which links are safe vs suspicious.',
+    difficulty: 'medium',
+    time_limit: 180,
+    points: 250,
+    questions: [
+      {
+        id: 'q1',
+        question: 'Which URL is more suspicious?',
+        options: ['https://login.microsoftonline.com', 'https://micr0soft-login.com/security'],
+        correct_answer: 'https://micr0soft-login.com/security',
+        explanation: 'Misspelled brand with extra path – classic phishing domain.'
+      },
+      {
+        id: 'q2',
+        question: 'A link claims to be PayPal but shows paypal.com.secure-checkout.info. What do you do?',
+        options: ['Trust it because it has paypal.com', 'Treat as phishing'],
+        correct_answer: 'Treat as phishing',
+        explanation: 'Real domain is secure-checkout.info; paypal.com is just a subdomain fragment.'
+      }
+    ],
+    stats: { attempts: 0, passed: 0, best_score: 0 }
+  },
+  {
+    id: 'email-red-flags-1',
+    title: 'Email Red Flags',
+    description: 'Identify urgent and credential-stealing language.',
+    difficulty: 'easy',
+    time_limit: 180,
+    points: 200,
+    questions: [
+      {
+        id: 'q3',
+        question: 'Subject: “URGENT: Verify your account now or it will be closed.” Safe or phishy?',
+        options: ['Safe', 'Phishy'],
+        correct_answer: 'Phishy',
+        explanation: 'Urgency + threat of closure are common phishing tactics.'
+      }
+    ],
+    stats: { attempts: 0, passed: 0, best_score: 0 }
+  }
+]
 
 export default function Challenges() {
-  const { data: challenges, loading } = useApi<Challenge[]>('/api/challenges')
+  const { data: challenges, loading, error } = useApi<Challenge[]>('/api/challenges')
+  const { refreshUser } = useAuth()
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
   const [activeQuestion, setActiveQuestion] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -22,6 +70,9 @@ export default function Challenges() {
   const [started, setStarted] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
+
+  const challengeList = (challenges && challenges.length > 0 ? challenges : FALLBACK_CHALLENGES)
+  const usingFallback = !loading && (!challenges || challenges.length === 0 || !!error)
 
   // DEBUG: Show alert when component mounts
   useEffect(() => {
@@ -50,6 +101,19 @@ export default function Challenges() {
 
   const submitChallenge = async () => {
     if (!selectedChallenge) return
+
+    const locallyGrade = () => {
+      const total = selectedChallenge.questions.length
+      let correct = 0
+      selectedChallenge.questions.forEach(q => {
+        if (q.correct_answer && answers[q.id] === q.correct_answer) correct += 1
+      })
+      const score = Math.round((correct / total) * 100)
+      const passed = score >= 70
+      const points_earned = passed ? selectedChallenge.points : 0
+      return { passed, score, correct, total, points_earned }
+    }
+
     try {
       const res = await fetch('/api/submit-challenge', {
         method: 'POST',
@@ -60,26 +124,32 @@ export default function Challenges() {
           time_taken: selectedChallenge.time_limit - timeLeft,
         }),
       })
+
       if (res.ok) {
         const data = await res.json()
         setResult(data)
         setSubmitted(true)
-        
-        // Record challenge completion in localStorage
         const passed = data.passed || data.score >= 70
         completeChallenge(selectedChallenge.id, selectedChallenge.points, passed)
-        
-        // Show toast notification
-        if (passed) {
-          setToastMessage(`🎉 Challenge passed! +${selectedChallenge.points} points earned!`)
-        } else {
-          setToastMessage(`💪 Keep trying! You can retake this challenge.`)
-        }
+        // Refresh user stats to get updated XP
+        await refreshUser()
+        setToastMessage(passed ? `🎉 Challenge passed! +${selectedChallenge.points} points earned!` : `💪 Keep trying! You can retake this challenge.`)
         setShowToast(true)
+        return
       }
     } catch (err) {
-      console.error('Failed to submit:', err)
+      console.error('Failed to submit to API, falling back to local grading:', err)
     }
+
+    // Offline/local grading fallback
+    const data = locallyGrade()
+    setResult(data)
+    setSubmitted(true)
+    completeChallenge(selectedChallenge.id, selectedChallenge.points, data.passed)
+    // Refresh user stats even in offline mode
+    await refreshUser()
+    setToastMessage(data.passed ? `🎉 Challenge passed! +${selectedChallenge.points} points earned!` : `💪 Keep trying! You can retake this challenge.`)
+    setShowToast(true)
   }
 
   const formatTime = (seconds: number) => {
@@ -242,10 +312,16 @@ export default function Challenges() {
         <div className="mb-12">
           <h1 className="text-5xl font-bold text-white mb-2">Challenges</h1>
           <p className="text-slate-400">Test your skills and earn points</p>
+          {usingFallback && (
+            <div className="mt-3 flex items-center gap-2 text-amber-300 text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              Showing sample challenges (API unavailable)
+            </div>
+          )}
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
-          {challenges?.map(challenge => {
+          {challengeList.map(challenge => {
             const stats = challenge.stats || { attempts: 0, passed: 0, best_score: 0 }
             const completed = stats.passed > 0
 

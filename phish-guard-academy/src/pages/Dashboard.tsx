@@ -9,6 +9,7 @@ import { getProgress, getAnalytics, getDailyChallenge, isDailyChallengeCompleted
 import { getLevelInfo } from '../utils/progression'
 import { shareProgress } from '../utils/share'
 import { useNotifications } from '../contexts/NotificationContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useAchievements } from '../contexts/AchievementContext'
 import { motion } from 'framer-motion'
 
@@ -41,6 +42,8 @@ interface Achievement {
 export default function Dashboard() {
   const { success, error: showError } = useNotifications()
   const { triggerAchievement } = useAchievements()
+  const { token } = useAuth()
+  const API_URL = (import.meta as any)?.env?.VITE_API_URL ?? ''
   const [stats, setStats] = useState<AnalysisStats>({
     total: 0,
     flagged: 0,
@@ -126,6 +129,23 @@ export default function Dashboard() {
     }))
     setRecentActivity(recentAnalyses)
     
+    // Overlay backend achievements unlocks
+    const fetchAchievements = async () => {
+      try {
+        if (!token) return
+        const res = await fetch(`${API_URL}/api/auth/achievements`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        const unlocked = new Set<string>((data.achievements || []).filter((a: any) => a.unlocked).map((a: any) => String(a.id)))
+        setAchievements(prev => prev.map(ach => ({ ...ach, unlocked: unlocked.has(String(ach.id)) })))
+      } catch (e) {
+        // ignore
+      }
+    }
+    fetchAchievements()
+
     // Refresh when page becomes visible
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -145,7 +165,7 @@ export default function Dashboard() {
     
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [])
+  }, [token])
 
   const detectionRate = stats.total > 0 ? ((stats.flagged / stats.total) * 100).toFixed(1) : '0'
   const levelInfo = getLevelInfo(userXP)
@@ -302,7 +322,7 @@ export default function Dashboard() {
 
           {/* Main Stats Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-            <Card className="hover:scale-105 transition-transform duration-300">
+            <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/30 hover:border-blue-400/50 hover:shadow-blue-500/10 hover:scale-105 transition">
               <CardContent>
                 <div className="flex items-center justify-between mb-3">
                   <BarChart3 className="w-5 h-5 text-blue-400" />

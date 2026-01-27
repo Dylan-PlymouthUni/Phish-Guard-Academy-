@@ -35,7 +35,6 @@ interface Settings {
   notifications: boolean
   email_alerts: boolean
   difficulty_preference: string
-  theme: string
   auto_save: boolean
   language: string
   reduced_motion: boolean
@@ -47,6 +46,8 @@ interface Settings {
   ml_whitelist?: string[]
   auto_analyze?: boolean
   show_confidence?: boolean
+  keyboard_shortcuts?: boolean
+  font_size?: 'small' | 'medium' | 'large'
 }
 
 const STORAGE_KEYS = {
@@ -74,13 +75,14 @@ const DEFAULT_SETTINGS: Settings = {
   notifications: true,
   email_alerts: false,
   difficulty_preference: 'medium',
-  theme: 'dark',
   auto_save: true,
   language: 'en',
   reduced_motion: false,
   sound_effects: true,
   daily_reminder: true,
-  weekly_report: false
+  weekly_report: false,
+  keyboard_shortcuts: true,
+  font_size: 'medium'
 }
 
 // Progress Management

@@ -1,29 +1,12 @@
-import { Menu, X, Zap, BarChart3, BookOpen, Target, Settings, Shield, LayoutDashboard, Beaker, Sun, Moon, Trophy } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Menu, X, Zap, BarChart3, BookOpen, Target, Settings, Shield, LayoutDashboard, Beaker, Trophy, Award } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { getSettings, saveSettings } from '../utils/storage'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Navigation() {
   const [open, setOpen] = useState(false)
-  const [darkMode, setDarkMode] = useState(true)
   const location = useLocation()
-
-  useEffect(() => {
-    const settings = getSettings()
-    setDarkMode(settings.theme === 'dark')
-  }, [])
-
-  const toggleTheme = () => {
-    const newTheme = darkMode ? 'light' : 'dark'
-    setDarkMode(!darkMode)
-    saveSettings({ theme: newTheme })
-    
-    if (newTheme === 'light') {
-      document.documentElement.classList.add('light-theme')
-    } else {
-      document.documentElement.classList.remove('light-theme')
-    }
-  }
+  const { user, isAuthenticated } = useAuth()
 
   const isActive = (path: string) => location.pathname === path
 
@@ -34,6 +17,7 @@ export default function Navigation() {
     { path: '/challenges', label: 'Challenges', icon: Target },
     { path: '/learning', label: 'Learn', icon: BookOpen },
     { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+    { path: '/achievements', label: 'Achievements', icon: Award },
     { path: '/analytics', label: 'Analytics', icon: BarChart3 },
     { path: '/settings', label: 'Settings', icon: Settings },
   ]
@@ -64,6 +48,11 @@ export default function Navigation() {
                 <span className="text-sm font-medium">{label}</span>
               </Link>
             ))}
+            {isAuthenticated && (
+              <div className="flex items-center gap-3 pl-3 ml-3 border-l border-slate-700">
+                <span className="text-sm text-slate-300 hidden xl:inline">Hi, {user?.name || 'you'}</span>
+              </div>
+            )}
           </div>
 
           {/* Mobile */}

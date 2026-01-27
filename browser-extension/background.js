@@ -13,14 +13,24 @@ chrome.runtime.onInstalled.addListener(() => {
   })
 })
 
+// Get API URL from storage or use default
+function getApiUrl() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get({ apiUrl: 'http://localhost:8000' }, (items) => {
+      resolve(items.apiUrl)
+    })
+  })
+}
+
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const url = info.linkUrl || info.pageUrl
+  const apiUrl = await getApiUrl()
   
   if (!url) return
   
   try {
-    const response = await fetch('http://localhost:8000/analyze/url', {
+    const response = await fetch(`${apiUrl}/api/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -29,7 +39,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     })
     
     const data = await response.json()
-    const riskScore = data.risk_score || 0
+    const riskScore = data.risk || 0
     
     // Update badge
     if (riskScore >= 70) {
@@ -46,8 +56,30 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     // Show notification
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icons/icon128.png',
+      iconUrl: 'icons/icon128.svg',
       title: 'PhishGuard Analysis',
+      message: `Risk Level: ${riskScore}% - ${riskScore >= 70 ? 'HIGH' : riskScore >= 40 ? 'MEDIUM' : 'LOW'}`
+    })
+    
+    // Store result for popup
+    chrome.storage.session.set({
+      lastAnalysis: {
+        url,
+        riskScore,
+        timestamp: Date.now()
+      }
+    })
+  } catch (error) {
+    console.error('Analysis failed:', error)
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.svg',
+      title: 'PhishGuard Error',
+      message: 'Failed to analyze URL. Check connection.'
+    })
+  }
+})
+
       message: `Risk Score: ${riskScore}% - ${riskScore >= 70 ? 'High Risk' : riskScore >= 40 ? 'Medium Risk' : 'Safe'}`
     })
   } catch (error) {

@@ -13,7 +13,7 @@ export default function Home() {
     const steps = 60;
     const interval = duration / steps;
     
-    const targets = { analyses: 12500, users: 8300, rate: 98.7 };
+    const targets = { analyses: 12500, users: 8300, rate: 94.8 };
     let step = 0;
 
     const timer = setInterval(() => {

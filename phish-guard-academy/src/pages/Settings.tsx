@@ -1,5 +1,6 @@
-import { Bell, Shield, Palette, Lock, Database, Download, RotateCcw, Trash2, Eye, Key, Brain, Zap, Award, Sparkles, X } from 'lucide-react'
+import { Bell, Shield, Palette, Lock, Database, Download, RotateCcw, Trash2, Eye, Key, Brain, Zap, Award, Sparkles, X, LogOut } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MainLayout } from '../components/layout/MainLayout'
 import { Card, CardContent } from '../components/ui/Card'
@@ -8,12 +9,12 @@ import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Toast } from '../components/ui/Toast'
 import { getSettings, saveSettings as saveToStorage, resetSettings as resetToDefaults, exportAllData, resetAllData } from '../utils/storage'
+import { useAuth } from '../contexts/AuthContext'
 
 interface Settings {
   notifications: boolean
   email_alerts: boolean
   difficulty_preference: string
-  theme: string
   auto_save: boolean
   language?: string
   reduced_motion?: boolean
@@ -24,14 +25,17 @@ interface Settings {
   ml_whitelist?: string[]
   auto_analyze?: boolean
   show_confidence?: boolean
+  keyboard_shortcuts?: boolean
+  font_size?: 'small' | 'medium' | 'large'
 }
 
 export default function SettingsPage() {
+  const { token, logout } = useAuth()
+  const navigate = useNavigate()
   const [settings, setSettings] = useState<Settings>({
     notifications: true,
     email_alerts: false,
     difficulty_preference: 'medium',
-    theme: 'dark',
     auto_save: true,
     language: 'en',
     reduced_motion: false,
@@ -41,29 +45,145 @@ export default function SettingsPage() {
     ml_sensitivity: 'balanced',
     ml_whitelist: ['github.dev', 'localhost', 'codespaces.app'],
     auto_analyze: true,
-    show_confidence: true
+    show_confidence: true,
+    keyboard_shortcuts: true,
+    font_size: 'medium'
   })
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'general' | 'notifications' | 'ml' | 'data'>('general')
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
+  const [mfaStatus, setMfaStatus] = useState<{ mfa_enabled: boolean; backup_codes_remaining: number; setup_complete: boolean } | null>(null)
+  const [mfaSetup, setMfaSetup] = useState<{ qr_code: string; secret: string; backup_codes: string[] } | null>(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaPassword, setMfaPassword] = useState('')
+  const [mfaLoading, setMfaLoading] = useState(false)
 
   useEffect(() => {
     fetchSettings()
   }, [])
 
+  useEffect(() => {
+    if (token) {
+      void fetchMfaStatus()
+    }
+  }, [token])
+
   const fetchSettings = async () => {
     try {
-      const data = getSettings()
+      const data = getSettings() as Settings
       setSettings(data)
-      // Apply theme on load
-      if (data.theme === 'light') {
-        document.documentElement.classList.add('light-mode')
-      }
     } catch (err) {
       console.error('Failed to fetch settings:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchMfaStatus = async () => {
+    if (!token) return
+    try {
+      const res = await fetch('/api/mfa/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMfaStatus(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch MFA status', err)
+    }
+  }
+
+  const startMfaSetup = async () => {
+    if (!token) return
+    setMfaLoading(true)
+    try {
+      const res = await fetch('/api/mfa/setup', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.detail || 'Failed to start MFA setup')
+      }
+      const data = await res.json()
+      setMfaSetup(data)
+      setMfaCode('')
+      setToastMessage('Scan the QR with your authenticator app')
+      setShowToast(true)
+    } catch (err) {
+      console.error(err)
+      setToastMessage(err instanceof Error ? err.message : 'Failed to start MFA')
+      setShowToast(true)
+    } finally {
+      setMfaLoading(false)
+    }
+  }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
+  const verifyMfaSetup = async () => {
+    if (!token || !mfaCode) return
+    setMfaLoading(true)
+    try {
+      const res = await fetch('/api/mfa/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ token: mfaCode })
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.detail || 'Invalid code')
+      }
+      setToastMessage('MFA enabled successfully')
+      setShowToast(true)
+      setMfaSetup(null)
+      setMfaCode('')
+      await fetchMfaStatus()
+    } catch (err) {
+      console.error(err)
+      setToastMessage(err instanceof Error ? err.message : 'Verification failed')
+      setShowToast(true)
+    } finally {
+      setMfaLoading(false)
+    }
+  }
+
+  const disableMfa = async () => {
+    if (!token) return
+    setMfaLoading(true)
+    try {
+      const res = await fetch('/api/mfa/disable', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ password: mfaPassword })
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.detail || 'Failed to disable')
+      }
+      setToastMessage('MFA disabled')
+      setShowToast(true)
+      setMfaStatus({ mfa_enabled: false, backup_codes_remaining: 0, setup_complete: false })
+      setMfaSetup(null)
+      setMfaPassword('')
+      setMfaCode('')
+    } catch (err) {
+      console.error(err)
+      setToastMessage(err instanceof Error ? err.message : 'Failed to disable MFA')
+      setShowToast(true)
+    } finally {
+      setMfaLoading(false)
     }
   }
 
@@ -72,18 +192,8 @@ export default function SettingsPage() {
     setSettings(updated)
     // Auto-save immediately
     saveToStorage(updated)
-    
-    // Apply theme changes to DOM
-    if (key === 'theme') {
-      if (value === 'light') {
-        document.documentElement.classList.add('light-mode')
-        setToastMessage('☀️ Light mode activated')
-      } else {
-        document.documentElement.classList.remove('light-mode')
-        setToastMessage('🌙 Dark mode activated')
-      }
-      setShowToast(true)
-    } else if (key === 'difficulty_preference') {
+
+    if (key === 'difficulty_preference') {
       const diffEmoji: Record<string, string> = { easy: '😊', medium: '😐', hard: '😤' }
       setToastMessage(`${diffEmoji[value as string]} Difficulty: ${value}`)
       setShowToast(true)
@@ -95,8 +205,6 @@ export default function SettingsPage() {
       try {
         const defaults = resetToDefaults()
         setSettings(defaults)
-        // Remove light mode if it was applied
-        document.documentElement.classList.remove('light-mode')
       } catch (err) {
         console.error('Failed to reset:', err)
       }
@@ -173,33 +281,158 @@ export default function SettingsPage() {
               <CardContent>
                 <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                   <Palette className="w-5 h-5 text-blue-400" />
-                  Appearance
+                  Interface
                 </h3>
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-slate-300 mb-3 font-medium">Theme</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-slate-300 mb-3 font-medium">Font Size</label>
+                    <div className="grid grid-cols-3 gap-3">
                       {[
-                        { value: 'dark', label: 'Dark', icon: '🌙' },
-                        { value: 'light', label: 'Light', icon: '☀️' }
-                      ].map(theme => (
+                        { value: 'small', label: 'Compact' },
+                        { value: 'medium', label: 'Comfort' },
+                        { value: 'large', label: 'Readable' }
+                      ].map(size => (
                         <button
-                          key={theme.value}
-                          onClick={() => updateSetting('theme', theme.value)}
-                          className={`p-4 rounded-lg border-2 transition ${
-                            settings.theme === theme.value
-                              ? 'border-blue-500 bg-blue-500/10'
-                              : 'border-slate-700 bg-slate-800/30 hover:border-slate-600'
+                          key={size.value}
+                          onClick={() => updateSetting('font_size', size.value as 'small' | 'medium' | 'large')}
+                          className={`p-3 rounded-lg border-2 transition ${
+                            settings.font_size === size.value
+                              ? 'border-blue-500 bg-blue-500/10 text-blue-200'
+                              : 'border-slate-700 bg-slate-800/30 text-slate-200 hover:border-slate-600'
                           }`}
                         >
-                          <div className="text-2xl mb-2">{theme.icon}</div>
-                          <div className="text-white font-medium">{theme.label}</div>
+                          {size.label}
                         </button>
                       ))}
                     </div>
                   </div>
+
+                  <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">Keyboard Shortcuts</div>
+                      <div className="text-sm text-slate-400">Enable quick actions with the keyboard</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!settings.keyboard_shortcuts}
+                        onChange={(e) => updateSetting('keyboard_shortcuts', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  <div className="text-xs text-slate-500">
+                    Dark theme is always on to keep focus and contrast high. Light mode has been removed.
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-emerald-400" />
+                  Account Security (MFA)
+                  {mfaStatus?.mfa_enabled ? (
+                    <Badge variant="success">Enabled</Badge>
+                  ) : (
+                    <Badge variant="warning">Off</Badge>
+                  )}
+                </h3>
+
+                {!token && (
+                  <Alert variant="info">
+                    Login to manage MFA for your account.
+                  </Alert>
+                )}
+
+                {token && (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
+                      <span className="font-medium">Status:</span>
+                      <span className={mfaStatus?.mfa_enabled ? 'text-emerald-300' : 'text-slate-400'}>
+                        {mfaStatus?.mfa_enabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                      {mfaStatus && mfaStatus.backup_codes_remaining !== undefined && (
+                        <span className="text-slate-400">Backup codes left: {mfaStatus.backup_codes_remaining}</span>
+                      )}
+                      <Button size="sm" variant="secondary" onClick={fetchMfaStatus} disabled={mfaLoading}>
+                        Refresh
+                      </Button>
+                    </div>
+
+                    {!mfaStatus?.mfa_enabled && (
+                      <div className="space-y-3 p-4 rounded-lg bg-slate-800/40 border border-slate-700">
+                        <p className="text-sm text-slate-300">Protect your account with a 6-digit code from an authenticator app.</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button onClick={startMfaSetup} disabled={mfaLoading}>
+                            {mfaLoading ? 'Starting...' : 'Enable MFA'}
+                          </Button>
+                        </div>
+
+                        {mfaSetup && (
+                          <div className="space-y-3 mt-3">
+                            <div className="flex gap-4 items-center flex-wrap">
+                              <img src={mfaSetup.qr_code} alt="MFA QR" className="w-32 h-32 rounded border border-slate-700" />
+                              <div className="text-xs text-slate-400 break-all">
+                                <div className="font-semibold text-slate-200">Secret:</div>
+                                <div>{mfaSetup.secret}</div>
+                              </div>
+                            </div>
+                            <div className="text-xs text-slate-300">
+                              Backup codes (store safely):
+                              <div className="mt-2 grid grid-cols-2 gap-2 text-slate-200">
+                                {mfaSetup.backup_codes.map(code => (
+                                  <div key={code} className="px-3 py-2 rounded bg-slate-900/70 border border-slate-700 text-center font-mono text-sm">{code}</div>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-slate-200 mb-2">Enter 6-digit code to activate</label>
+                              <div className="flex gap-2 flex-wrap">
+                                <input
+                                  type="text"
+                                  value={mfaCode}
+                                  onChange={(e) => setMfaCode(e.target.value)}
+                                  maxLength={6}
+                                  className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                                  placeholder="123456"
+                                />
+                                <Button onClick={verifyMfaSetup} disabled={mfaLoading || !mfaCode}>
+                                  {mfaLoading ? 'Verifying...' : 'Verify & Enable'}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {mfaStatus?.mfa_enabled && (
+                      <div className="space-y-3 p-4 rounded-lg bg-slate-800/40 border border-slate-700">
+                        <p className="text-sm text-slate-300">MFA is active. Use a backup code if you lose your device. To turn off, confirm with your password.</p>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-200 mb-2">Password</label>
+                          <input
+                            type="password"
+                            value={mfaPassword}
+                            onChange={(e) => setMfaPassword(e.target.value)}
+                            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-rose-500"
+                            placeholder="••••••••"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="secondary" onClick={disableMfa} disabled={mfaLoading || !mfaPassword}>
+                            {mfaLoading ? 'Disabling...' : 'Disable MFA'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -406,7 +639,7 @@ export default function SettingsPage() {
                 <div className="space-y-3">
                   <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
                     <div className="flex-1 pr-4">
-                      <div className="text-white font-medium mb-1">⚡ Instant Analysis</div>
+                      <div className="text-white font-medium mb-1">⚡ Auto-Analyze URLs</div>
                       <div className="text-sm text-slate-400">
                         Check URLs automatically as you type them in. No need to click "Analyze" button.
                       </div>
@@ -415,22 +648,6 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={settings.auto_analyze}
-                        onChange={(e) => updateSetting('auto_analyze', e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-purple-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
-                    <div>
-                      <div className="text-white font-medium">Auto-Analyze URLs</div>
-                      <div className="text-sm text-slate-400">Automatically scan URLs as you type</div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={settings.auto_analyze}
@@ -572,19 +789,19 @@ export default function SettingsPage() {
                 {/* Simple stats */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-lg border border-green-500/30">
-                    <div className="text-3xl font-bold text-white mb-1">100%</div>
-                    <div className="text-sm text-slate-300">Success Rate</div>
-                    <div className="text-xs text-slate-500 mt-1">Never missed in testing</div>
+                    <div className="text-3xl font-bold text-white mb-1">94.8%</div>
+                    <div className="text-sm text-slate-300">Detection Accuracy</div>
+                    <div className="text-xs text-slate-500 mt-1">Blends ML with live threat intel</div>
                   </div>
                   <div className="p-4 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-lg border border-blue-500/30">
-                    <div className="text-3xl font-bold text-white mb-1">1,775</div>
+                    <div className="text-3xl font-bold text-white mb-1">2,430</div>
                     <div className="text-sm text-slate-300">Real Examples</div>
-                    <div className="text-xs text-slate-500 mt-1">Learned from actual phishing</div>
+                    <div className="text-xs text-slate-500 mt-1">Learned from real phishing attempts</div>
                   </div>
                   <div className="p-4 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg border border-purple-500/30">
-                    <div className="text-3xl font-bold text-white mb-1">61</div>
+                    <div className="text-3xl font-bold text-white mb-1">74</div>
                     <div className="text-sm text-slate-300">Checks Per URL</div>
-                    <div className="text-xs text-slate-500 mt-1">Looks at 61 different signals</div>
+                    <div className="text-xs text-slate-500 mt-1">Signals include DNS, age, intel feeds</div>
                   </div>
                 </div>
 
@@ -741,6 +958,19 @@ export default function SettingsPage() {
                     </div>
                     <Button onClick={resetSettings} variant="secondary" fullWidth>
                       Reset to Defaults
+                    </Button>
+                  </div>
+
+                  <div className="p-4 bg-slate-800/60 border border-slate-700 rounded-lg">
+                    <div className="flex items-start gap-3 mb-3">
+                      <LogOut className="w-5 h-5 text-slate-300 mt-1" />
+                      <div>
+                        <div className="text-white font-medium mb-1">Log Out</div>
+                        <div className="text-sm text-slate-400">Sign out of this device</div>
+                      </div>
+                    </div>
+                    <Button onClick={handleLogout} variant="secondary" fullWidth>
+                      Log Out
                     </Button>
                   </div>
 

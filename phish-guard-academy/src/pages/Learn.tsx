@@ -1,4 +1,4 @@
-import { BookOpen, CheckCircle, Trophy } from 'lucide-react'
+import { BookOpen, CheckCircle, Trophy, AlertTriangle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { MainLayout } from '../components/layout/MainLayout'
@@ -9,11 +9,36 @@ import { Toast } from '../components/ui/Toast'
 import { useApi } from '../hooks/useApi'
 import { SkeletonCard } from '../components/ui/Skeleton'
 import { Lesson, UserProgress } from '../types'
-import { completeLesson as recordLessonCompletion } from '../utils/storage'
+import { completeLesson as recordLessonCompletion, getProgress } from '../utils/storage'
+import { useAuth } from '../contexts/AuthContext'
+
+const FALLBACK_LESSONS: Lesson[] = [
+  {
+    id: 'lsn-basics-1',
+    title: 'Phishing Basics',
+    description: 'Learn the core red flags attackers use.',
+    difficulty: 'easy',
+    duration: 6,
+    points: 150,
+    content: `## Common Red Flags\n\n- Urgent tone ("verify now or get locked out")\n- Mismatched sender domains\n- Links that mask a different destination\n- Requests for passwords or MFA codes`,
+    completed: false
+  },
+  {
+    id: 'lsn-urls-1',
+    title: 'URL Safety 101',
+    description: 'Spotting dangerous links quickly.',
+    difficulty: 'medium',
+    duration: 8,
+    points: 200,
+    content: `### Check the real domain\n\n1. Look after the last dot before any path.\n2. Watch for swapped letters: paypa1.com, micr0soft.com.\n3. Treat URL shorteners cautiously.`,
+    completed: false
+  }
+]
 
 export default function Learn() {
-  const { data: lessons, loading } = useApi<Lesson[]>('/api/lessons')
+  const { data: lessons, loading, error } = useApi<Lesson[]>('/api/lessons')
   const { data: progress } = useApi<UserProgress>('/api/progress')
+  const { refreshUser } = useAuth()
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
   const [showToast, setShowToast] = useState(false)
 
@@ -22,6 +47,15 @@ export default function Learn() {
     console.log('📚 Learn page - lessons:', lessons?.length || 0, 'loading:', loading)
   }, [lessons, loading])
 
+  const lessonList = lessons && lessons.length > 0 ? lessons : FALLBACK_LESSONS
+  const usingFallback = !loading && (!lessons || lessons.length === 0 || !!error)
+  const localProgress = getProgress()
+  const effectiveProgress: Partial<UserProgress> | null = progress || {
+    total_points: localProgress.total_points,
+    lessons_completed: localProgress.lessons_completed.length,
+    achievements: localProgress.achievements as any
+  }
+
   const completeLesson = async (lessonId: string) => {
     try {
       const res = await fetch(`/api/complete-lesson/${lessonId}`, { method: 'POST' })
@@ -29,12 +63,24 @@ export default function Learn() {
         // Record completion in localStorage
         if (selectedLesson) {
           recordLessonCompletion(lessonId, selectedLesson.points)
+          // Refresh user stats to get updated XP
+          await refreshUser()
           setShowToast(true)
         }
         setSelectedLesson(null)
+        return
       }
     } catch (err) {
       console.error('Failed:', err)
+    }
+
+    // Offline fallback: mark complete locally
+    if (selectedLesson) {
+      recordLessonCompletion(lessonId, selectedLesson.points)
+      // Refresh user stats even in offline mode
+      await refreshUser()
+      setShowToast(true)
+      setSelectedLesson(null)
     }
   }
 
@@ -107,33 +153,39 @@ export default function Learn() {
         <div className="mb-12">
           <h1 className="text-5xl font-bold text-white mb-2">Learning Hub</h1>
           <p className="text-slate-400">Master phishing detection skills</p>
+          {usingFallback && (
+            <div className="mt-3 flex items-center gap-2 text-amber-300 text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              Showing sample lessons (API unavailable)
+            </div>
+          )}
         </div>
 
-        {progress && (
+        {effectiveProgress && (
           <div className="grid md:grid-cols-3 gap-4 mb-12">
             <Card>
               <CardContent className="text-center">
                 <p className="text-slate-400 mb-2">Total Points</p>
-                <p className="text-4xl font-bold text-yellow-400">{progress.total_points || 0}</p>
+                <p className="text-4xl font-bold text-yellow-400">{effectiveProgress.total_points || 0}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="text-center">
                 <p className="text-slate-400 mb-2">Lessons Completed</p>
-                <p className="text-4xl font-bold text-blue-400">{progress.lessons_completed || 0}</p>
+                <p className="text-4xl font-bold text-blue-400">{effectiveProgress.lessons_completed || 0}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="text-center">
                 <p className="text-slate-400 mb-2">Achievements</p>
-                <p className="text-4xl font-bold text-purple-400">{progress.achievements?.filter(a => a.unlocked).length || 0}</p>
+                <p className="text-4xl font-bold text-purple-400">{effectiveProgress.achievements?.filter((a: any) => a.unlocked).length || 0}</p>
               </CardContent>
             </Card>
           </div>
         )}
 
         <div className="grid md:grid-cols-2 gap-6">
-          {lessons?.map(lesson => (
+          {lessonList.map(lesson => (
             <button
               key={lesson.id}
               onClick={() => setSelectedLesson(lesson)}

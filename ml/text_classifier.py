@@ -28,6 +28,7 @@ try:
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
+    torch = None  # Optional dependency; fallback to CPU/TF-IDF
     logging.warning("Transformers not installed. Run: pip install -r requirements-ml.txt")
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,10 @@ class TextPhishingClassifier:
         use_gpu: bool = True
     ):
         self.model_name = model_name
-        self.device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
+        if use_gpu and TRANSFORMERS_AVAILABLE and torch and torch.cuda.is_available():
+            self.device = "cuda"
+        else:
+            self.device = "cpu"
         
         self.tokenizer: Optional[AutoTokenizer] = None
         self.model: Optional[Any] = None

@@ -1,10 +1,11 @@
 import { BarChart3, TrendingUp, AlertCircle, CheckCircle, PieChart as PieChartIcon, Activity, Calendar, Download, Target, Zap, Shield } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { getAnalytics, getProgress, getAnalyses } from '../utils/storage'
+import { useAuth } from '../contexts/AuthContext'
 import { MainLayout } from '../components/layout/MainLayout'
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
 import { exportAnalyticsJSON, exportAnalyticsCSV, exportAnalysesCSV, exportCertificate } from '../utils/export'
 import { Button } from '../components/ui/Button'
+import { useLocation } from 'react-router-dom'
 
 interface DailyStats {
   date: string
@@ -35,6 +36,9 @@ export default function Analytics() {
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([])
   const [distribution, setDistribution] = useState<RiskDistribution | null>(null)
   const [loading, setLoading] = useState(true)
+  const { token, refreshUser } = useAuth()
+  const API_URL = (import.meta as any)?.env?.VITE_API_URL ?? ''
+  const location = useLocation()
 
   // Helper function to generate daily stats
   const generateDailyStats = (analyses: any[]): DailyStats[] => {
@@ -62,45 +66,104 @@ export default function Analytics() {
 
   useEffect(() => {
     fetchData()
-    
-    // Refresh data when page becomes visible
+  }, [token])
+
+  // Refresh data when page becomes visible or receives focus
+  useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchData()
-      }
+      if (!document.hidden) fetchData()
     }
+    const handleFocus = () => fetchData()
     
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [])
+
+  // Force refresh on route changes
+  useEffect(() => {
+    fetchData()
+  }, [location.key])
 
   const fetchData = async () => {
     try {
-      const analytics = getAnalytics()
-      const progress = getProgress()
-      const analyses = getAnalyses()
-      
-      setSummary({
-        total_analyses: analytics.total_analyses,
-        high_risk_count: analytics.high_risk_count,
-        medium_risk_count: analytics.medium_risk_count,
-        safe_count: analytics.safe_count,
-        avg_risk_percent: analytics.avg_risk_percent,
-        challenges_passed: analytics.challenges_passed,
-        total_lessons: analytics.total_lessons
-      })
-      
-      setDistribution({
-        high: analytics.high_risk_count,
-        medium: analytics.medium_risk_count,
-        safe: analytics.safe_count
-      })
-      
-      // Generate daily stats from last 30 days
-      if (analyses.length > 0) {
-        const daily = generateDailyStats(analyses)
-        setDailyStats(daily)
+      if (!token) {
+        setSummary({
+          total_analyses: 0,
+          high_risk_count: 0,
+          medium_risk_count: 0,
+          safe_count: 0,
+          avg_risk_percent: 0,
+          challenges_passed: 0,
+          total_lessons: 0
+        })
+        setDistribution({ high: 0, medium: 0, safe: 0 })
+        setDailyStats([])
+        return
       }
+      // Summary
+      const sRes = await fetch(`${API_URL}/api/analytics/summary?t=${Date.now()}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
+      const sJson = await sRes.json()
+      setSummary({
+        total_analyses: sJson.total_analyses || 0,
+        high_risk_count: sJson.high_risk_count || 0,
+        medium_risk_count: sJson.medium_risk_count || 0,
+        safe_count: (sJson.low_risk_count || 0),
+        avg_risk_percent: sJson.average_risk || 0,
+        challenges_passed: sJson.challenges_passed || 0,
+        total_lessons: sJson.total_lessons || 0
+      })
+      
+      // Sync user stats
+      if (sJson.user_stats) {
+        await refreshUser()
+      }
+
+      // Distribution
+      const dRes = await fetch(`${API_URL}/api/analytics/distribution?t=${Date.now()}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
+      const dJson = await dRes.json()
+      setDistribution({
+        high: dJson.high || 0,
+        medium: dJson.medium || 0,
+        safe: dJson.low || 0
+      })
+
+      // Daily
+      const dayRes = await fetch(`${API_URL}/api/analytics/daily?t=${Date.now()}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
+      const dayJson = await dayRes.json()
+      const ds: DailyStats[] = (dayJson.daily_stats || []).map((d: any) => ({
+        date: d.date,
+        analyses_count: d.count || 0,
+        avg_risk_percent: 0,
+        challenges_passed: 0,
+        lessons_completed: 0
+      }))
+      setDailyStats(ds)
+      
+      // Refresh user stats
+      await refreshUser()
     } catch (err) {
       console.error('Failed to fetch analytics:', err)
       setSummary({
@@ -110,9 +173,10 @@ export default function Analytics() {
         safe_count: 0,
         avg_risk_percent: 0,
         challenges_passed: 0,
-        total_lessons: 7
+        total_lessons: 0
       })
       setDistribution({ high: 0, medium: 0, safe: 0 })
+      setDailyStats([])
     } finally {
       setLoading(false)
     }
@@ -416,7 +480,7 @@ export default function Analytics() {
                 { skill: 'Analysis Speed', value: Math.min(100, summary.total_analyses * 5), fullMark: 100 },
                 { skill: 'Learning Progress', value: Math.min(100, (summary.total_lessons / 7) * 100), fullMark: 100 },
                 { skill: 'Challenge Mastery', value: Math.min(100, summary.challenges_passed * 20), fullMark: 100 },
-                { skill: 'Consistency', value: Math.min(100, (getProgress().streak || 0) * 10), fullMark: 100 },
+                { skill: 'Consistency', value: Math.min(100, summary.total_analyses * 2), fullMark: 100 },
               ]}>
                 <PolarGrid stroke="rgba(148, 163, 184, 0.2)" />
                 <PolarAngleAxis 
