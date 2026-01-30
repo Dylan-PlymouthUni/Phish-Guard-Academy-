@@ -580,6 +580,12 @@ export default function Analytics() {
                 <span>You've analyzed {summary.total_analyses} items. Your security awareness is improving.</span>
               </li>
             )}
+            {summary.total_analyses === 0 && summary.challenges_passed < 3 && (
+              <li className="flex gap-3">
+                <span className="text-slate-400">💡</span>
+                <span>Start analyzing phishing attempts and completing challenges to unlock personalized security insights!</span>
+              </li>
+            )}
           </ul>
         </div>
         </div>

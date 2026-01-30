@@ -60,7 +60,7 @@ const FALLBACK_CHALLENGES: Challenge[] = [
 
 export default function Challenges() {
   const { data: challenges, loading, error } = useApi<Challenge[]>('/api/challenges')
-  const { refreshUser } = useAuth()
+  const { refreshUser, token } = useAuth()
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
   const [activeQuestion, setActiveQuestion] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -117,7 +117,10 @@ export default function Challenges() {
     try {
       const res = await fetch('/api/submit-challenge', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           challenge_id: selectedChallenge.id,
           answers,

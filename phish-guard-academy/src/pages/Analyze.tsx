@@ -19,7 +19,7 @@ export default function Analyze() {
   const [activeTab, setActiveTab] = useState<'screenshot' | 'email' | 'url'>('screenshot')
   const [error, setError] = useState<string | null>(null)
   const [showToast, setShowToast] = useState(false)
-  const { token, refreshUser } = useAuth()
+  const { refreshUser, token } = useAuth()
 
   const analyzeScreenshot = async () => {
     if (!file) return
@@ -30,6 +30,7 @@ export default function Analyze() {
       formData.append('image', file)
       const res = await fetch('/api/analyze', { 
         method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         body: formData
       })
       if (res.ok) {
@@ -65,6 +66,7 @@ export default function Analyze() {
       formData.append('url', url)
       const res = await fetch('/api/analyze', { 
         method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         body: formData
       })
       if (res.ok) {

@@ -38,7 +38,7 @@ const FALLBACK_LESSONS: Lesson[] = [
 export default function Learn() {
   const { data: lessons, loading, error } = useApi<Lesson[]>('/api/lessons')
   const { data: progress } = useApi<UserProgress>('/api/progress')
-  const { refreshUser } = useAuth()
+  const { refreshUser, token } = useAuth()
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
   const [showToast, setShowToast] = useState(false)
 
@@ -58,7 +58,10 @@ export default function Learn() {
 
   const completeLesson = async (lessonId: string) => {
     try {
-      const res = await fetch(`/api/complete-lesson/${lessonId}`, { method: 'POST' })
+      const res = await fetch(`/api/complete-lesson/${lessonId}`, { 
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
       if (res.ok) {
         // Record completion in localStorage
         if (selectedLesson) {

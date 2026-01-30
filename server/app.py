@@ -42,7 +42,7 @@ _ensemble = None
 
 
 def get_optional_user(request: Request):
-    """Return authenticated user if Authorization bearer token is present; otherwise None."""
+    """Return token_data if Authorization bearer token is present; otherwise None."""
     auth_header = request.headers.get("Authorization") if request else None
     if not auth_header:
         return None
@@ -51,15 +51,7 @@ def get_optional_user(request: Request):
         return None
     token = parts[1]
     token_data = verify_token(token)
-    if not token_data:
-        return None
-    db = SessionLocal()
-    try:
-        from ml.persistence import get_repositories
-        repos = get_repositories(db)
-        return repos["users"].get_by_id(token_data.user_id)
-    finally:
-        db.close()
+    return token_data
 
 def get_ensemble() -> PhishingEnsemble:
     """Get or initialize ensemble model"""
@@ -257,14 +249,16 @@ async def analyze(
         risk = int(result.risk_score)
 
         # Persist analysis if user is authenticated
-        user = get_optional_user(request)
-        if user:
+        token_data = get_optional_user(request)
+        logger.info(f"[ANALYSIS_PERSIST] Auth check: token_data={'present' if token_data else 'NONE'}")
+        if token_data:
             db = SessionLocal()
             try:
                 from ml.persistence import get_repositories
                 repos = get_repositories(db)
-                db_user = repos["users"].get_by_id(user.id)
+                db_user = repos["users"].get_by_id(token_data.user_id)
                 if db_user:
+                    old_xp = db_user.xp or 0
                     analysis_record = DBAnalysis(
                         user_id=db_user.id,
                         analysis_type=("multi" if url and text and pil_image else "url" if url else "text" if text else "screenshot"),
@@ -274,12 +268,15 @@ async def analyze(
                         findings=json.dumps([f.__dict__ for f in findings])
                     )
                     db.add(analysis_record)
-                    db_user.xp = (db_user.xp or 0) + 10
+                    db_user.xp = old_xp + 10
                     db_user.level = (db_user.xp // 1000) + 1
                     db.commit()
+                    logger.info(f"[ANALYSIS_PERSIST] SAVED: {db_user.email} XP: {old_xp} → {db_user.xp}")
+                else:
+                    logger.error(f"[ANALYSIS_PERSIST] User not found for token: {token_data.user_id}")
             except Exception as db_err:
                 db.rollback()
-                logger.error(f"Failed to persist analysis: {db_err}")
+                logger.error(f"Failed to persist analysis: {db_err}", exc_info=True)
             finally:
                 db.close()
 
