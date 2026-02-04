@@ -7,7 +7,7 @@ import os
 from typing import Optional, Dict, Any
 from datetime import datetime
 import uuid
-from ml.auth import hash_password, verify_password
+from ml.auth import hash_password, verify_password, validate_password_length
 
 USERS_FILE = "data/users.json"
 
@@ -42,6 +42,8 @@ class UserDatabase:
         # Check if user already exists
         if any(u["email"] == email for u in self.users.values()):
             return None
+
+        validate_password_length(password)
         
         user_id = str(uuid.uuid4())
         user = {

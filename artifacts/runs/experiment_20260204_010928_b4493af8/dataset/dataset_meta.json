@@ -1,0 +1,8 @@
+{
+  "source_file": "data/training/url_training_data_20260202_040657.csv",
+  "total_samples": 2274,
+  "phishing_count": 1775,
+  "legitimate_count": 499,
+  "collection_timestamp": "2026-02-04T01:10:11.584215",
+  "random_seed": 42
+}

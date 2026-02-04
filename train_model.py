@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Standalone model training script (no FastAPI overhead)."""
+"""
+⚠️  LEGACY/EXPERIMENTAL — not used for dissertation results.
+Use scripts/run_experiment.py for reproducible dissertation results.
+
+Standalone model training script (no FastAPI overhead).
+"""
 
 import logging
 from pathlib import Path

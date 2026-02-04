@@ -144,6 +144,12 @@ def root():
 def health(request: Request):
     return {"ok": True}
 
+@app.get("/health")
+@limiter.limit("60/minute")
+def health_root(request: Request):
+    """Health check endpoint without /api prefix for monitoring tools"""
+    return {"ok": True}
+
 @app.post("/api/analyze", response_model=AnalysisResponse)
 @limiter.limit("30/minute")
 async def analyze(

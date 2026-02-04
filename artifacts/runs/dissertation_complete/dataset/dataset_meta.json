@@ -1,0 +1,28 @@
+{
+  "source_file": "data/training/url_training_data_20260202_040657.csv",
+  "total_samples": 2274,
+  "phishing_count": 1775,
+  "legitimate_count": 499,
+  "class_balance": 0.7805628847845206,
+  "collection_timestamp": "2026-02-04T03:38:34.644671",
+  "random_seed": 42,
+  "provenance": {
+    "collection_date": "2025-12-10T04:12:48.560611",
+    "sources": [
+      "PhishTank",
+      "OpenPhish",
+      "URLhaus",
+      "Tranco"
+    ],
+    "preprocessing_steps": [
+      "Deduplication",
+      "URL normalization",
+      "Label validation",
+      "Train/test stratification"
+    ],
+    "label_schema": {
+      "0": "legitimate",
+      "1": "phishing"
+    }
+  }
+}

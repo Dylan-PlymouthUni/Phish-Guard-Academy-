@@ -13,7 +13,8 @@ from sklearn.model_selection import train_test_split, cross_val_score, GridSearc
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     classification_report, confusion_matrix, roc_auc_score,
-    precision_recall_curve, average_precision_score
+    precision_recall_curve, average_precision_score,
+    accuracy_score, precision_score, recall_score, f1_score
 )
 import joblib
 import logging
@@ -106,6 +107,7 @@ class URLModelTrainer:
         logger.info(f"Best cross-validation score: {grid_search.best_score_:.4f}")
         
         self.model = grid_search.best_estimator_
+        self.grid_search = grid_search  # Store for later access
         
         # Evaluate on validation set
         self.evaluate(X_val, y_val)
@@ -131,6 +133,12 @@ class URLModelTrainer:
         logger.info(f"TN: {cm[0,0]}, FP: {cm[0,1]}")
         logger.info(f"FN: {cm[1,0]}, TP: {cm[1,1]}")
         
+        # Compute all metrics
+        accuracy = accuracy_score(y, y_pred)
+        precision = precision_score(y, y_pred, zero_division=0)
+        recall = recall_score(y, y_pred, zero_division=0)
+        f1 = f1_score(y, y_pred, zero_division=0)
+        
         # ROC-AUC
         roc_auc = roc_auc_score(y, y_proba)
         logger.info(f"\nROC-AUC Score: {roc_auc:.4f}")
@@ -145,9 +153,15 @@ class URLModelTrainer:
         logger.info("="*60)
         
         return {
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
             'roc_auc': roc_auc,
             'avg_precision': avg_precision,
-            'confusion_matrix': cm
+            'confusion_matrix': cm,
+            'y_pred': y_pred,
+            'y_proba': y_proba
         }
     
     def plot_feature_importance(self, top_n: int = 20):

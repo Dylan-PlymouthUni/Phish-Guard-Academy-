@@ -1,0 +1,85 @@
+nohup: ignoring input
+INFO:__main__:Loading dataset from data/training/url_training_data_20260202_040657.csv
+INFO:__main__:Dataset shape: (2274, 2)
+INFO:__main__:Phishing URLs: 1775
+INFO:__main__:Legitimate URLs: 499
+INFO:__main__:Extracting features from 2274 URLs...
+INFO:__main__:Processed 0/2274 URLs...
+INFO:__main__:Processed 500/2274 URLs...
+INFO:__main__:Processed 1000/2274 URLs...
+INFO:__main__:Processed 1500/2274 URLs...
+INFO:__main__:Processed 2000/2274 URLs...
+INFO:__main__:Successfully extracted features from 2274 URLs
+INFO:__main__:Total features per URL: 68
+INFO:__main__:Training Random Forest model...
+INFO:__main__:Performing grid search (this may take a while)...
+🎯 URL Phishing Detection Model Training
+============================================================
+📁 Using dataset: data/training/url_training_data_20260202_040657.csv
+
+Training set: 1455 samples
+Validation set: 364 samples
+Test set: 455 samples
+Fitting 3 folds for each of 216 candidates, totalling 648 fits
+INFO:__main__:Best parameters: {'class_weight': None, 'max_depth': 10, 'min_samples_leaf': 1, 'min_samples_split': 2, 'n_estimators': 100}
+INFO:__main__:Best cross-validation score: 0.9999
+INFO:__main__:Evaluating model...
+INFO:__main__:
+============================================================
+INFO:__main__:Classification Report:
+INFO:__main__:
+              precision    recall  f1-score   support
+
+  Legitimate       1.00      1.00      1.00        80
+    Phishing       1.00      1.00      1.00       284
+
+    accuracy                           1.00       364
+   macro avg       1.00      1.00      1.00       364
+weighted avg       1.00      1.00      1.00       364
+
+INFO:__main__:
+Confusion Matrix:
+INFO:__main__:TN: 80, FP: 0
+INFO:__main__:FN: 0, TP: 284
+INFO:__main__:
+ROC-AUC Score: 1.0000
+INFO:__main__:Average Precision: 1.0000
+INFO:__main__:Feature importance plot saved to data/training/plots/url_feature_importance.png
+INFO:__main__:============================================================
+INFO:__main__:Evaluating model...
+INFO:__main__:
+============================================================
+INFO:__main__:Classification Report:
+INFO:__main__:
+              precision    recall  f1-score   support
+
+  Legitimate       0.99      1.00      1.00       100
+    Phishing       1.00      1.00      1.00       355
+
+    accuracy                           1.00       455
+   macro avg       1.00      1.00      1.00       455
+weighted avg       1.00      1.00      1.00       455
+
+INFO:__main__:
+Confusion Matrix:
+INFO:__main__:TN: 100, FP: 0
+INFO:__main__:FN: 1, TP: 354
+INFO:__main__:
+ROC-AUC Score: 1.0000
+INFO:__main__:Average Precision: 1.0000
+INFO:__main__:Feature importance plot saved to data/training/plots/url_feature_importance.png
+INFO:__main__:============================================================
+INFO:__main__:Model saved to ml/model/url_phish_rf_trained.joblib
+
+============================================================
+FINAL TEST SET EVALUATION:
+============================================================
+
+============================================================
+✅ URL Model Training Complete!
+============================================================
+📊 Test ROC-AUC: 1.0000
+📊 Test Avg Precision: 1.0000
+💾 Model saved to: ml/model/url_phish_rf_trained.joblib
+
+Next: python train_text_model.py

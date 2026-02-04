@@ -7,7 +7,7 @@ from typing import Optional
 from pydantic import BaseModel
 from ml.auth import (
     UserCreate, UserLogin, TokenResponse, UserProfile,
-    create_access_token, verify_token
+    create_access_token, verify_token, validate_password_length
 )
 from ml.db_models import get_db
 from ml.persistence import get_repositories
@@ -84,6 +84,12 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         # Check if email already exists
         if repos["users"].get_by_email(user_data.email):
             raise HTTPException(status_code=400, detail="Email already registered")
+
+        # Validate password length (bcrypt limit)
+        try:
+            validate_password_length(user_data.password)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         # Create user
         user = repos["users"].create_user(

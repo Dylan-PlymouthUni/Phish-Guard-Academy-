@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class AdvancedURLAnalyzer:
     """Extract comprehensive features from URLs for ML models"""
     
-    def __init__(self, timeout: int = 5):
+    def __init__(self, timeout: int = 1):  # Reduced for speed
         self.timeout = timeout
         self.session = requests.Session()
         self.session.headers.update({
@@ -219,41 +219,19 @@ class AdvancedURLAnalyzer:
     
     def _whois_features(self, netloc: str) -> Dict:
         """Extract WHOIS features"""
-        features = {
+        # DISABLED FOR SPEED
+        return {
             'domain_age_days': -1,
             'domain_expires_days': -1,
             'whois_privacy': False,
             'domain_recently_registered': False,
         }
-        
-        if not ADVANCED_LIBS_AVAILABLE:
-            return features
-        
-        try:
-            hostname = netloc.split(':')[0]
-            w = whois.whois(hostname)
-            
-            if w.creation_date:
-                creation = w.creation_date[0] if isinstance(w.creation_date, list) else w.creation_date
-                features['domain_age_days'] = (datetime.now() - creation).days
-                features['domain_recently_registered'] = features['domain_age_days'] < 30
-            
-            if w.expiration_date:
-                expiry = w.expiration_date[0] if isinstance(w.expiration_date, list) else w.expiration_date
-                features['domain_expires_days'] = (expiry - datetime.now()).days
-            
-            # Privacy protection is sometimes used by phishers
-            if w.registrar:
-                features['whois_privacy'] = 'privacy' in str(w.registrar).lower()
-                
-        except Exception as e:
-            logger.debug(f"WHOIS lookup failed for {netloc}: {e}")
-        
-        return features
+    
     
     def _content_features(self, url: str) -> Dict:
         """Fetch and analyze page content with phishing pattern detection"""
-        features = {
+        # DISABLED FOR SPEED
+        return {
             'page_title_length': 0,
             'num_links': 0,
             'num_external_links': 0,
@@ -272,114 +250,21 @@ class AdvancedURLAnalyzer:
             'obfuscated_javascript': False,
             'fake_address_bar': False,
         }
-        
-        try:
-            response = self.session.get(url, timeout=self.timeout, allow_redirects=True)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Title
-            title = soup.find('title')
-            if title:
-                features['page_title_length'] = len(title.get_text())
-            
-            # Links
-            links = soup.find_all('a', href=True)
-            features['num_links'] = len(links)
-            
-            domain = urlparse(url).netloc
-            external_links = [l for l in links if domain not in l.get('href', '')]
-            features['num_external_links'] = len(external_links)
-            features['external_link_ratio'] = (
-                len(external_links) / len(links) if links else 0
-            )
-            
-            # Forms
-            forms = soup.find_all('form')
-            features['has_forms'] = len(forms) > 0
-            features['num_forms'] = len(forms)
-            
-            inputs = soup.find_all('input')
-            features['num_input_fields'] = len(inputs)
-            features['has_password_field'] = any(
-                inp.get('type') == 'password' for inp in inputs
-            )
-            
-            # Media
-            features['num_images'] = len(soup.find_all('img'))
-            features['num_scripts'] = len(soup.find_all('script'))
-            features['has_iframes'] = len(soup.find_all('iframe')) > 0
-            
-            # Size
-            features['page_size_kb'] = len(response.content) / 1024
-            
-            # Phishing-specific patterns
-            page_text = soup.get_text().lower()
-            login_keywords = ['sign in', 'log in', 'verify account', 'confirm identity', 
-                            'update payment', 'suspended', 'locked']
-            features['has_login_keywords'] = any(kw in page_text for kw in login_keywords)
-            
-            # Check for suspicious form actions (external domain)
-            for form in forms:
-                action = form.get('action', '')
-                if action and 'http' in action:
-                    form_domain = urlparse(action).netloc
-                    if form_domain and form_domain != domain:
-                        features['suspicious_form_action'] = True
-            
-            # Hidden elements (common obfuscation technique)
-            hidden = soup.find_all(style=re.compile(r'display:\s*none|visibility:\s*hidden', re.I))
-            features['hidden_elements_count'] = len(hidden)
-            
-            # Obfuscated JavaScript
-            scripts = soup.find_all('script')
-            for script in scripts:
-                script_text = script.get_text()
-                if any(pattern in script_text for pattern in ['eval(', 'unescape(', 'fromCharCode']):
-                    features['obfuscated_javascript'] = True
-                    break
-            
-            # Fake address bar (iframe trick)
-            for iframe in soup.find_all('iframe'):
-                if iframe.get('style') and 'position' in iframe.get('style', ''):
-                    features['fake_address_bar'] = True
-            
-        except Exception as e:
-            logger.debug(f"Content fetch failed for {url}: {e}")
-        
-        return features
+    
     
     def _redirect_features(self, url: str) -> Dict:
         """Analyze redirect chain"""
-        features = {
+        # DISABLED FOR SPEED
+        return {
             'num_redirects': 0,
-            'final_url_different': False,
-            'redirect_to_different_domain': False,
+            'has_redirects': False,
+            'redirect_chain_length': 0,
+            'cross_domain_redirect': False,
+            'multiple_redirects': False,
         }
-        
-        try:
-            response = self.session.get(
-                url, 
-                timeout=self.timeout, 
-                allow_redirects=True
-            )
-            
-            features['num_redirects'] = len(response.history)
-            features['final_url_different'] = url != response.url
-            
-            if features['num_redirects'] > 0:
-                original_domain = urlparse(url).netloc
-                final_domain = urlparse(response.url).netloc
-                features['redirect_to_different_domain'] = (
-                    original_domain != final_domain
-                )
-                
-        except Exception as e:
-            logger.debug(f"Redirect check failed for {url}: {e}")
-        
-        return features
     
-    @staticmethod
-    def _is_ip_address(netloc: str) -> bool:
+    
+    def _is_ip_address(self, netloc: str) -> bool:
         """Check if netloc is an IP address"""
         hostname = netloc.split(':')[0]
         pattern = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'

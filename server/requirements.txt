@@ -4,3 +4,17 @@ pydantic==2.9.2
 python-multipart==0.0.12
 pillow==10.4.0
 pytesseract==0.3.10
+
+# Auth & security
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
+python-jose[cryptography]==3.3.0
+email-validator==2.2.0
+
+# Rate limiting & DB
+slowapi==0.1.9
+sqlalchemy==2.0.36
+
+# MFA
+pyotp==2.9.0
+qrcode[pil]==7.4.2

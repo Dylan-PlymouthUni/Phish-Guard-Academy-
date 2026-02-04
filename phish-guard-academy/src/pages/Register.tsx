@@ -11,6 +11,9 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const maxPasswordBytes = 72;
+  const passwordBytes = new TextEncoder().encode(password).length;
+  const isPasswordTooLong = passwordBytes > maxPasswordBytes;
   
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -26,6 +29,11 @@ export default function Register() {
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (isPasswordTooLong) {
+      setError('Password is too long (max 72 bytes). Please shorten it.');
       return;
     }
 
@@ -100,6 +108,9 @@ export default function Register() {
                 className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
                 placeholder="••••••••"
               />
+              <p className={`mt-1 text-xs ${isPasswordTooLong ? 'text-red-300' : 'text-slate-400'}`}>
+                {passwordBytes}/{maxPasswordBytes} bytes (bcrypt limit)
+              </p>
             </div>
 
             <div>
@@ -118,11 +129,11 @@ export default function Register() {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isPasswordTooLong}
               className="w-full py-2"
             >
               <GradientButton
-                disabled={isLoading}
+                disabled={isLoading || isPasswordTooLong}
                 className="w-full py-2"
               >
                 {isLoading ? 'Creating account...' : 'Create Account'}

@@ -288,19 +288,138 @@ npm run build        # Build optimized frontend
 - IP address usage in URLs
 - Visual similarity patterns (screenshots)
 
+**See [docs/feature_specification.md](docs/feature_specification.md) for complete feature documentation (61+ features)**
+
 ### Model Performance
 - **Training Dataset**: 1,775+ real-world phishing URLs balanced with legitimate samples
 - **Expected Accuracy**: 95%+ on balanced test sets
 - **Model Type**: Random Forest Classifier with 61 engineered features
 - **False Positive Rate**: Target of less than 5%
 - **Detection Capability**: Strong performance on common phishing patterns
-- **Continuous Improvement**: Model updated with new threat data
+- **Continuous Improvement (Planned)**: Manual retraining scripts exist, but automated continuous learning is not implemented yet
 
 ### Model Architecture
 - Random Forest ensemble with hyperparameter tuning
 - GridSearchCV for optimal parameter selection
 - Cross-validation for robust performance estimates
 - Feature importance analysis for interpretability
+
+---
+
+## Reproducibility and Dissertation Results
+
+### Important: Continuous Learning Status
+
+**This project does NOT implement automated continuous learning.**
+
+-  **What exists**: Manual retraining scripts (`train_url_model.py`, `train_all_models.py`) that allow retraining the model on new data
+-  **What does NOT exist**: Automated pipelines that continuously update the model in production
+-  **No feedback loop**: User analyses are not automatically used to retrain the model
+-  **No scheduled retraining**: Models are only retrained when manually invoked
+
+All dissertation results and claimed performance metrics come from manual experimental runs documented in `artifacts/runs/`.
+
+### Running the Canonical Experiment
+
+The reproducibility framework provides a single entry point for all dissertation experiments:
+
+```bash
+# Default run (seed=42, auto-generated run_id)
+python scripts/run_experiment.py
+
+# Specific seed for reproducibility
+python scripts/run_experiment.py --seed 42
+
+# Custom run ID with dataset snapshot for full reproducibility
+python scripts/run_experiment.py --seed 42 --run_id baseline_experiment --save_dataset_snapshot
+
+# Help text
+python scripts/run_experiment.py --help
+```
+
+### Artifact Locations and Structure
+
+All experimental results are saved to `artifacts/runs/<run_id>/` with the following structure:
+
+```
+artifacts/runs/<run_id>/
+├── dataset/
+│   ├── dataset.csv                 (optional: full dataset snapshot)
+│   ├── dataset_meta.json           (sample counts, phishing/legitimate ratio, timestamp, seed)
+│   └── splits.json                 (train/val/test split sizes, random seed, stratification info)
+├── model/
+│   └── url_phish_rf_model.joblib   (trained RandomForest + feature names)
+├── eval/
+│   ├── metrics_summary.json        (accuracy, precision, recall, F1, ROC-AUC, PR-AUC, confusion matrix)
+│   ├── y_test.npy                  (true test set labels)
+│   ├── y_pred.npy                  (model predictions on test set)
+│   ├── y_proba.npy                 (phishing probability scores)
+│   ├── confusion_matrix.npy        (2×2 confusion matrix)
+│   ├── feature_importance.csv      (feature names with importance scores)
+│   ├── roc_curve.json              (FPR, TPR, thresholds, AUC for ROC curve)
+│   ├── pr_curve.json               (precision, recall, thresholds, AP for PR curve)
+│   ├── baseline_metrics.json       (baseline heuristic performance for comparison)
+│   └── plots/
+│       ├── roc_curve.png           (ROC curve visualization)
+│       ├── pr_curve.png            (Precision-Recall curve visualization)
+│       └── confusion_matrix.png    (Confusion matrix heatmap)
+├── env/
+│   └── environment.json            (git SHA, Python version, OS, timestamp, random seed)
+└── run_manifest.json               (comprehensive metadata: all hyperparameters, dataset info, model path, all artifact paths)
+```
+
+### Using Results for Dissertation
+
+**Official dissertation results must be sourced from `artifacts/runs/<run_id>/eval/metrics_summary.json`**
+
+Example of metrics file:
+```json
+{
+  "model_type": "RandomForest",
+  "seed": 42,
+  "test_set_size": 455,
+  "accuracy": 0.9252747252747253,
+  "precision": 0.9168831168831169,
+  "recall": 0.9943661971830986,
+  "f1": 0.9540540540540541,
+  "roc_auc": 0.9874929577464788,
+  "average_precision": 0.9964354838541492,
+  "confusion_matrix": [[68, 32], [2, 353]]
+}
+```
+
+### Reproducibility Guarantees
+
+ **Deterministic execution**: All random processes seeded with explicit seed value
+ **Full traceability**: Git commit SHA recorded in every run manifest
+ **Auditable predictions**: All predictions, probabilities, and labels saved to `.npy` files
+ **Verifiable metrics**: Every metric value computed from saved predictions
+ **Publication-quality plots**: Consistent visualizations saved as PNG files
+ **Complete metadata**: Run manifest includes all hyperparameters, environment info, and artifact paths
+
+### Canonical Training Script
+
+- **File**: `train_url_model.py`
+- **Entry point**: `scripts/run_experiment.py` (recommended for full reproducibility)
+- **Purpose**: Binary classification of phishing vs. legitimate URLs
+- **Dataset**: `data/training/url_training_data_*.csv` (latest by timestamp)
+- **Train/Val/Test split**: 60% / 20% / 20% (stratified by label)
+- **Model**: Random Forest with GridSearchCV hyperparameter tuning
+- **Features**: 61+ URL-derived features from `ml.advanced_url_features`
+
+### Example: Reproducing Baseline Results
+
+```bash
+# Run with the default seed to reproduce baseline metrics
+python scripts/run_experiment.py --seed 42 --run_id baseline_20260204
+
+# After completion, view results
+cat artifacts/runs/baseline_20260204/run_manifest.json
+cat artifacts/runs/baseline_20260204/eval/metrics_summary.json
+
+# Access all predictions for external validation
+ls -lh artifacts/runs/baseline_20260204/eval/*.npy
+```
 
 ---
 
@@ -311,20 +430,10 @@ npm run build        # Build optimized frontend
 - **Visual**: Modern design with gradients and animations
 - **Accessible**: Works on all devices and screen sizes
 - **Educational**: Every feature teaches something valuable
+- **Reproducible**: All dissertation results fully auditable and reproducible via artifact persistence
 
 ---
 
-## Contributing
-
-Contributions, issues, and feature requests are welcome! This is an academic project, but feedback is always appreciated.
-
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
 
 ## License
 
@@ -352,7 +461,6 @@ This project is part of a dissertation for COMP3000 at the University of Plymout
 
 - Real-time phishing feed integration
 - Browser extension for on-the-fly URL checking
-- Mobile application version
 - Advanced deep learning models (CNN for screenshot analysis)
 - Community-driven threat reporting
 - API access for third-party integrations

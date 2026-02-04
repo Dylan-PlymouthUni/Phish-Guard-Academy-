@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """
+ LEGACY/EXPERIMENTAL — not used for dissertation results.
+Use scripts/run_experiment.py for reproducible dissertation results.
+
 Master Training Pipeline
 Collects data and trains all models in sequence
 """

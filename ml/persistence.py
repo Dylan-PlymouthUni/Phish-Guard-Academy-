@@ -10,7 +10,7 @@ from ml.db_models import (
     DBUser, DBAnalysis, DBChallengeAttempt, 
     DBLessonProgress, DBAchievement, SessionLocal
 )
-from ml.auth import hash_password, verify_password
+from ml.auth import hash_password, verify_password, validate_password_length
 
 
 class UserRepository:
@@ -23,6 +23,8 @@ class UserRepository:
         """Create a new user"""
         if self.get_by_email(email):
             return None
+
+        validate_password_length(password)
         
         user = DBUser(
             email=email,

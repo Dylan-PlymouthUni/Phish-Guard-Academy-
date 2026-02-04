@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Advanced model training with hyperparameter tuning."""
+"""
+⚠️  LEGACY/EXPERIMENTAL — not used for dissertation results.
+Use scripts/run_experiment.py for reproducible dissertation results.
+
+Advanced model training with hyperparameter tuning.
+"""
 
 import logging
 from pathlib import Path

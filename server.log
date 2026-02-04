@@ -1,21 +1,173 @@
 nohup: ignoring input
 INFO:     Will watch for changes in these directories: ['/workspaces/Phish-Guard-Academy-']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [12438] using StatReload
-INFO:     Started server process [12588]
+INFO:     Started reloader process [79699] using WatchFiles
+INFO:     Started server process [79702]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:server.app:Initializing Phishing Ensemble...
-WARNING:easyocr.easyocr:Neither CUDA nor MPS are available - defaulting to CPU. Note: This module is much faster with a GPU.
-INFO:ml.ensemble:Loaded trained URL model: 2.0.0-trained
-INFO:ml.ensemble:Model accuracy: 100.00%
-INFO:ml.ensemble:Ensemble initialized with weights: {'url': 0.55, 'text': 0.25, 'visual': 0.15, 'heuristic': 0.05}
-INFO:server.app:Image loaded: (500, 281)
-ERROR:server.app:Analysis error: PhishingEnsemble.analyze_screenshot() got an unexpected keyword argument 'screenshot'
-Traceback (most recent call last):
-  File "/workspaces/Phish-Guard-Academy-/server/app.py", line 115, in analyze
-    result = ensemble.analyze_screenshot(screenshot=pil_image)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: PhishingEnsemble.analyze_screenshot() got an unexpected keyword argument 'screenshot'
-INFO:     176.249.216.5:0 - "POST /api/analyze HTTP/1.1" 200 OK
-INFO:     176.249.216.5:0 - "POST /api/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44766 - "POST /api/auth/register HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "POST /api/auth/register HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/achievements HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/achievements HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/challenges HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/challenges HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "POST /api/submit-challenge HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+[LEADERBOARD] Refreshed user: 1@gmail.com XP=33
+[LEADERBOARD] Total users in DB: 8
+INFO:     31.205.82.43:0 - "GET /api/leaderboard HTTP/1.1" 200 OK
+[LEADERBOARD] Refreshed user: 1@gmail.com XP=33
+[LEADERBOARD] Total users in DB: 8
+INFO:     31.205.82.43:0 - "GET /api/leaderboard HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/achievements HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/achievements HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/summary?t=1770013438369 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/summary?t=1770013438369 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/summary?t=1770013438369 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/summary?t=1770013438369 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/distribution?t=1770013438510 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/distribution?t=1770013438518 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/distribution?t=1770013438542 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/distribution?t=1770013438552 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/daily?t=1770013438567 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/daily?t=1770013438581 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/daily?t=1770013438595 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/daily?t=1770013438611 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/achievements HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/achievements HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+Neither CUDA nor MPS are available - defaulting to CPU. Note: This module is much faster with a GPU.
+/usr/local/python/3.12.1/lib/python3.12/site-packages/sklearn/base.py:463: InconsistentVersionWarning: Trying to unpickle estimator DecisionTreeClassifier from version 1.7.2 when using version 1.8.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+/usr/local/python/3.12.1/lib/python3.12/site-packages/sklearn/base.py:463: InconsistentVersionWarning: Trying to unpickle estimator RandomForestClassifier from version 1.7.2 when using version 1.8.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+INFO:     31.205.82.43:0 - "POST /api/analyze HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/progress HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/lessons HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/progress HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/lessons HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/summary?t=1770013460506 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/summary?t=1770013460506 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/summary?t=1770013460507 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/summary?t=1770013460506 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/distribution?t=1770013460661 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/distribution?t=1770013460671 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/distribution?t=1770013460675 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/distribution?t=1770013460674 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/daily?t=1770013460705 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/daily?t=1770013460728 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/daily?t=1770013460738 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/analytics/daily?t=1770013460753 HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     31.205.82.43:0 - "GET /api/auth/me HTTP/1.1" 200 OK

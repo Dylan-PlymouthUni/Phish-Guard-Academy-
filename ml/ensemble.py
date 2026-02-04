@@ -96,49 +96,89 @@ class PhishingEnsemble:
     def analyze_url(self, url: str) -> PredictionResult:
         """Analyze URL for phishing"""
         
-        # Get predictions from each component
-        url_result = self._analyze_url_component(url)
-        heuristic_result = self._analyze_heuristic_component(url=url, text="")
-        
-        # Combine scores
-        scores = {
-            'url': url_result.get('risk', 0) / 100,
-            'heuristic': heuristic_result.get('risk', 0) / 100,
-            'text': 0.0,  # No text available
-            'visual': 0.0  # No visual available
-        }
-        
-        # If trained model was used, boost its influence
-        if url_result.get('model_used') == 'trained_rf' and scores['url'] > 0.7:
-            # High confidence from trained model - trust it more
-            final_score = scores['url'] * 0.85 + scores['heuristic'] * 0.15
-        else:
-            final_score = self._weighted_ensemble(scores)
-        
-        confidence = self._calculate_confidence(
-            [url_result.get('confidence', 0.5), heuristic_result.get('confidence', 0.5)]
-        )
-        
-        # Combine findings
-        findings = []
-        findings.extend(url_result.get('findings', []))
-        findings.extend(heuristic_result.get('findings', []))
-        
-        return PredictionResult(
-            risk_score=final_score * 100,
-            confidence=confidence,
-            phishing_probability=final_score,
-            component_scores=scores,
-            findings=findings,
-            explanation={
-                'url_analysis': url_result,
-                'heuristic_analysis': heuristic_result
-            },
-            model_versions={
-                'ensemble': '1.0',
-                'url': '1.0'
+        try:
+            # Get predictions from each component
+            url_result = self._analyze_url_component(url)
+            heuristic_result = self._analyze_heuristic_component(url=url, text="")
+            
+            # Combine scores
+            scores = {
+                'url': url_result.get('risk', 0) / 100,
+                'heuristic': heuristic_result.get('risk', 0) / 100,
+                'text': 0.0,  # No text available
+                'visual': 0.0  # No visual available
             }
-        )
+            
+            # UPGRADE 2: Detect disagreement between components
+            disagreement = self._calculate_disagreement(scores)
+            
+            # Smart ensemble logic: when heuristic rules find no phishing indicators,
+            # they are more reliable than ML model alone (which may have false positives)
+            heuristic_risk = heuristic_result.get('risk', 0)
+            ml_risk = url_result.get('risk', 0)
+            
+            if heuristic_risk == 0 and ml_risk > 50:
+                # Heuristic rules found NO actual phishing patterns but ML model is high confidence.
+                # This is likely a false positive - apply skepticism discount.
+                final_score = (scores['heuristic'] * 0.60) + (scores['url'] * 0.40)
+            elif heuristic_risk > 0 and ml_risk < 30:
+                # Heuristic found real patterns but ML model disagrees.
+                # Heuristics catch behavioral/content clues ML might miss.
+                final_score = (scores['heuristic'] * 0.55) + (scores['url'] * 0.45)
+            else:
+                # Normal case: use standard ensemble weights
+                final_score = self._weighted_ensemble(scores)
+            
+            # Calculate confidence from component confidences
+            url_confidence = url_result.get('confidence', 0.5)
+            heur_confidence = heuristic_result.get('confidence', 0.7)
+            confidence = self._calculate_confidence([url_confidence, heur_confidence])
+            
+            # UPGRADE 3: Apply dynamic thresholding based on confidence
+            risk_category = self._get_risk_category(final_score * 100, confidence)
+            
+            # Combine findings
+            findings = []
+            findings.extend(url_result.get('findings', []))
+            findings.extend(heuristic_result.get('findings', []))
+            
+            # Add explanation note for false positive detection
+            if heuristic_risk == 0 and ml_risk > 50:
+                findings.append("⚠️ NOTE: ML model flagged this URL, but heuristic rules found no actual phishing indicators. This may be a false positive. Domain appears legitimate.")
+            
+            # UPGRADE 2: Add disagreement warning if significant
+            if disagreement > 0.5:
+                findings.append(f"⚠️ Model Disagreement: Components showed {disagreement:.0%} disagreement - recommendation confidence is lower than usual.")
+            
+            return PredictionResult(
+                risk_score=final_score * 100,
+                confidence=confidence,
+                phishing_probability=final_score,
+                component_scores=scores,
+                findings=findings,
+                explanation={
+                    'url_analysis': url_result,
+                    'heuristic_analysis': heuristic_result,
+                    'disagreement_score': disagreement,
+                    'risk_category': risk_category
+                },
+                model_versions={
+                    'ensemble': '2.0',  # Upgraded version
+                    'url': '1.0'
+                }
+            )
+        except Exception as e:
+            # UPGRADE: Graceful degradation - return safe fallback
+            logger.error(f"Ensemble analysis failed: {e}")
+            return PredictionResult(
+                risk_score=0.0,
+                confidence=0.0,
+                phishing_probability=0.0,
+                component_scores={'url': 0, 'heuristic': 0, 'text': 0, 'visual': 0},
+                findings=[f"⚠️ Analysis failed: {str(e)}. Unable to complete full analysis."],
+                explanation={'error': str(e)},
+                model_versions={'ensemble': '2.0', 'url': '1.0'}
+            )
     
     def analyze_text(self, text: str, url: Optional[str] = None) -> PredictionResult:
         """Analyze text content (email, message) for phishing"""
@@ -489,9 +529,12 @@ class PhishingEnsemble:
             return {'risk': 0, 'confidence': 0.0, 'findings': []}
     
     def _weighted_ensemble(self, scores: Dict[str, float], confidences: Optional[Dict[str, float]] = None) -> float:
-        """Combine component scores with learned weights (confidence-weighted)"""
+        """
+        Combine component scores with learned weights (confidence-weighted)
+        UPGRADE: Confidence-aware weighting + disagreement detection
+        """
         if confidences:
-            # Adjust weights based on component confidence
+            # UPGRADE 1: Confidence-aware weighting
             adjusted_weights = {}
             total_confidence = sum(confidences.values()) or 1.0
             
@@ -515,8 +558,24 @@ class PhishingEnsemble:
             )
         return min(weighted_sum, 1.0)
     
+    def _calculate_disagreement(self, scores: Dict[str, float]) -> float:
+        """
+        UPGRADE 2: Disagreement Detection
+        Calculate how much components disagree (0-1 scale, 0=agree, 1=total disagreement)
+        """
+        active_scores = [s for s in scores.values() if s > 0]
+        if len(active_scores) < 2:
+            return 0.0
+        
+        # Standard deviation of scores (higher = more disagreement)
+        disagreement = np.std(active_scores)
+        return min(disagreement, 1.0)  # Normalize to 0-1
+    
     def _calculate_confidence(self, individual_confidences: List[float]) -> float:
-        """Calculate overall confidence from component confidences"""
+        """
+        Calculate overall confidence from component confidences
+        UPGRADE: Account for disagreement in confidence
+        """
         if not individual_confidences:
             return 0.5
         
@@ -524,7 +583,34 @@ class PhishingEnsemble:
         mean_conf = np.mean(individual_confidences)
         agreement_bonus = len(individual_confidences) * 0.05
         
-        return min(mean_conf + agreement_bonus, 1.0)
+        # Penalize confidence when models disagree strongly
+        std_dev = np.std(individual_confidences)
+        disagreement_penalty = max(0, std_dev * 0.3)
+        
+        final_confidence = (mean_conf + agreement_bonus - disagreement_penalty)
+        return max(0.1, min(final_confidence, 1.0))  # Keep in valid range
+    
+    def _get_risk_category(self, risk_score: float, confidence: float) -> str:
+        """
+        UPGRADE 3: Dynamic Thresholding
+        Adjust risk categories based on confidence in the decision
+        """
+        if confidence < 0.5:
+            # When confidence is low, be conservative (lower thresholds)
+            if risk_score >= 60:
+                return "HIGH"
+            elif risk_score >= 35:
+                return "MEDIUM"
+            else:
+                return "LOW"
+        else:
+            # When confidence is high, use standard thresholds
+            if risk_score >= 70:
+                return "HIGH"
+            elif risk_score >= 40:
+                return "MEDIUM"
+            else:
+                return "LOW"
     
     def explain_prediction(self, result: PredictionResult) -> str:
         """Generate human-readable explanation"""

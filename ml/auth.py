@@ -15,6 +15,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))  # 30 days by default
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+MAX_BCRYPT_BYTES = 72
 
 
 # Pydantic schemas
@@ -54,7 +55,16 @@ class UserProfile(BaseModel):
 
 # Password helpers
 
+def validate_password_length(password: str) -> None:
+    if len(password.encode("utf-8")) > MAX_BCRYPT_BYTES:
+        raise ValueError(
+            "Password cannot be longer than 72 bytes. "
+            "Please use a shorter password (first 72 characters)."
+        )
+
+
 def hash_password(password: str) -> str:
+    validate_password_length(password)
     return pwd_context.hash(password)
 
 

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Train screenshot phishing detector."""
+"""
+⚠️  LEGACY/EXPERIMENTAL — not used for dissertation results.
+Use scripts/run_experiment.py for reproducible dissertation results.
+
+Train screenshot phishing detector.
+"""
 
 import os
 import json

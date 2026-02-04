@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """
+⚠️  LEGACY/EXPERIMENTAL — not used for dissertation results.
+Use scripts/run_experiment.py for reproducible dissertation results.
+
 Quick URL Model Trainer - Uses collected data
 """
 import sys

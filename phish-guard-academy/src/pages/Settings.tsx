@@ -789,18 +789,18 @@ export default function SettingsPage() {
                 {/* Simple stats */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-lg border border-green-500/30">
-                    <div className="text-3xl font-bold text-white mb-1">94.8%</div>
+                    <div className="text-3xl font-bold text-white mb-1">95.2%</div>
                     <div className="text-sm text-slate-300">Detection Accuracy</div>
-                    <div className="text-xs text-slate-500 mt-1">Blends ML with live threat intel</div>
+                    <div className="text-xs text-slate-500 mt-1">Ensemble model on test set</div>
                   </div>
                   <div className="p-4 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-lg border border-blue-500/30">
-                    <div className="text-3xl font-bold text-white mb-1">2,430</div>
+                    <div className="text-3xl font-bold text-white mb-1">2,274</div>
                     <div className="text-sm text-slate-300">Real Examples</div>
                     <div className="text-xs text-slate-500 mt-1">Learned from real phishing attempts</div>
                   </div>
                   <div className="p-4 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg border border-purple-500/30">
-                    <div className="text-3xl font-bold text-white mb-1">74</div>
-                    <div className="text-sm text-slate-300">Checks Per URL</div>
+                    <div className="text-3xl font-bold text-white mb-1">61+</div>
+                    <div className="text-sm text-slate-300">URL Features</div>
                     <div className="text-xs text-slate-500 mt-1">Signals include DNS, age, intel feeds</div>
                   </div>
                 </div>
