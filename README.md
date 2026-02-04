@@ -288,8 +288,6 @@ npm run build        # Build optimized frontend
 - IP address usage in URLs
 - Visual similarity patterns (screenshots)
 
-**See [docs/feature_specification.md](docs/feature_specification.md) for complete feature documentation (61+ features)**
-
 ### Model Performance
 - **Training Dataset**: 1,775+ real-world phishing URLs balanced with legitimate samples
 - **Expected Accuracy**: 95%+ on balanced test sets
