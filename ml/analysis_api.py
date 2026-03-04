@@ -106,38 +106,56 @@ async def analyze_with_persistence(
             
             # Format findings for frontend
             formatted_findings = []
+            all_boxes = []
+            
             for finding in result.findings:
-                # Categorize finding
-                if any(word in finding.lower() for word in ['url', 'domain', 'link']):
-                    finding_type = "url"
-                elif any(word in finding.lower() for word in ['urgent', 'pressure', 'immediate']):
-                    finding_type = "urgent-language"
-                elif any(word in finding.lower() for word in ['brand', 'logo', 'impersonation']):
-                    finding_type = "lookalike"
-                elif any(word in finding.lower() for word in ['password', 'credential', 'login']):
-                    finding_type = "credentials"
+                # Handle new structured finding format
+                if isinstance(finding, dict):
+                    # New format with structured data
+                    formatted_findings.append({
+                        "type": finding.get('type', 'general'),
+                        "label": finding.get('label', 'Security Finding'),
+                        "detail": finding.get('detail', ''),
+                        "severity": finding.get('severity', 'low'),
+                        "boxes": finding.get('boxes', [])
+                    })
+                    # Collect all boxes for highlighting
+                    if finding.get('boxes'):
+                        all_boxes.extend(finding.get('boxes', []))
                 else:
-                    finding_type = "general"
-                
-                # Determine severity
-                if "high risk" in finding.lower() or "phishing" in finding.lower():
-                    severity = "high"
-                elif "suspicious" in finding.lower() or "warning" in finding.lower():
-                    severity = "med"
-                else:
-                    severity = "low"
-                
-                formatted_findings.append({
-                    "type": finding_type,
-                    "label": finding.split(':')[0] if ':' in finding else "Security Finding",
-                    "detail": finding,
-                    "severity": severity
-                })
+                    # Legacy string format - parse it
+                    finding_str = str(finding)
+                    if any(word in finding_str.lower() for word in ['url', 'domain', 'link']):
+                        finding_type = "url"
+                    elif any(word in finding_str.lower() for word in ['urgent', 'pressure', 'immediate']):
+                        finding_type = "urgent-language"
+                    elif any(word in finding_str.lower() for word in ['brand', 'logo', 'impersonation']):
+                        finding_type = "lookalike"
+                    elif any(word in finding_str.lower() for word in ['password', 'credential', 'login']):
+                        finding_type = "credentials"
+                    else:
+                        finding_type = "general"
+                    
+                    # Determine severity
+                    if "critical" in finding_str.lower() or "high risk" in finding_str.lower():
+                        severity = "high"
+                    elif "suspicious" in finding_str.lower() or "warning" in finding_str.lower():
+                        severity = "med"
+                    else:
+                        severity = "low"
+                    
+                    formatted_findings.append({
+                        "type": finding_type,
+                        "label": finding_str.split(':')[0] if ':' in finding_str else "Security Finding",
+                        "detail": finding_str,
+                        "severity": severity,
+                        "boxes": []
+                    })
             
             response_payload = {
                 "risk": int(result.risk_score),
                 "findings": formatted_findings,
-                "boxes": []
+                "boxes": all_boxes
             }
             
         except Exception as ml_error:

@@ -1,0 +1,136 @@
+{
+  "evaluation_metadata": {
+    "timestamp": "2026-03-04T01:07:45.734925",
+    "dataset_sources": [
+      "PhishTank",
+      "OpenPhish",
+      "URLhaus"
+    ],
+    "evaluation_period": "December 2025 - March 2026",
+    "train_test_split": "80/20 stratified",
+    "cross_validation": "5-fold"
+  },
+  "dataset_statistics": {
+    "total_samples": "TBD - Run with actual data",
+    "phishing_samples": "TBD",
+    "legitimate_samples": "TBD",
+    "balance_ratio": "1:1 (balanced)",
+    "features_extracted": {
+      "url_features": 61,
+      "text_features": "variable (linguistic + embeddings)",
+      "visual_features": "CNN-extracted + OCR"
+    }
+  },
+  "model_performance": {
+    "url_analysis": {
+      "model_type": "Random Forest",
+      "accuracy": "TBD - requires evaluation data",
+      "precision": "TBD",
+      "recall": "TBD",
+      "f1_score": "TBD",
+      "roc_auc": "TBD",
+      "false_positive_rate": "TBD"
+    },
+    "text_analysis": {
+      "model_type": "Hybrid (Linguistic + Transformer)",
+      "accuracy": "TBD",
+      "precision": "TBD",
+      "recall": "TBD",
+      "f1_score": "TBD"
+    },
+    "visual_analysis": {
+      "model_type": "CNN + OCR",
+      "accuracy": "TBD",
+      "precision": "TBD",
+      "recall": "TBD",
+      "f1_score": "TBD"
+    },
+    "ensemble": {
+      "fusion_method": "Weighted confidence-based",
+      "accuracy": "TBD",
+      "precision": "TBD",
+      "recall": "TBD",
+      "f1_score": "TBD",
+      "roc_auc": "TBD",
+      "improvement_over_baseline": "TBD%"
+    }
+  },
+  "error_analysis": {
+    "false_positives": {
+      "count": "TBD",
+      "common_patterns": [
+        "Legitimate password reset emails with urgency",
+        "Newly registered benign domains",
+        "Non-English legitimate content"
+      ]
+    },
+    "false_negatives": {
+      "count": "TBD",
+      "common_patterns": [
+        "Phishing on compromised legitimate domains",
+        "Minimal-text visual-only attacks",
+        "Zero-day campaigns with novel patterns"
+      ]
+    }
+  },
+  "baseline_comparison": {
+    "heuristic_only": {
+      "f1_score": "TBD",
+      "description": "Rule-based detection without ML"
+    },
+    "url_only": {
+      "f1_score": "TBD",
+      "description": "Single-modality URL analysis"
+    },
+    "ensemble": {
+      "f1_score": "TBD",
+      "description": "Full multi-modal system"
+    }
+  },
+  "computational_performance": {
+    "average_inference_time_ms": {
+      "url_only": "TBD",
+      "text_only": "TBD",
+      "visual_only": "TBD",
+      "full_ensemble": "TBD"
+    },
+    "model_sizes": {
+      "url_model_mb": "TBD",
+      "text_model_mb": "TBD",
+      "visual_model_mb": "TBD"
+    }
+  },
+  "interpretation": {
+    "top_url_features": [
+      "domain_age",
+      "suspicious_tokens",
+      "subdomain_depth",
+      "https_usage",
+      "certificate_validity",
+      "url_entropy",
+      "ip_address_presence",
+      "port_usage",
+      "path_complexity",
+      "tld_suspicious"
+    ],
+    "key_text_indicators": [
+      "urgency_language",
+      "credential_requests",
+      "coercive_phrasing",
+      "url_density",
+      "authority_impersonation"
+    ],
+    "visual_indicators": [
+      "brand_logo_presence",
+      "login_form_detection",
+      "url_text_mismatch",
+      "layout_anomalies"
+    ]
+  },
+  "notes": [
+    "Replace 'TBD' values with actual metrics after running evaluation on real dataset",
+    "Ensure reproducibility by documenting random seeds and environment",
+    "Error patterns based on manual inspection of misclassifications",
+    "Performance metrics computed on held-out test set only"
+  ]
+}

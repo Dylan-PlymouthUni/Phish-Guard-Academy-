@@ -19,6 +19,7 @@ export default function Analyze() {
   const [activeTab, setActiveTab] = useState<'screenshot' | 'email' | 'url'>('screenshot')
   const [error, setError] = useState<string | null>(null)
   const [showToast, setShowToast] = useState(false)
+  const [screenshotForMarkup, setScreenshotForMarkup] = useState<string | null>(null)
   const { refreshUser, token } = useAuth()
 
   const analyzeScreenshot = async () => {
@@ -26,6 +27,13 @@ export default function Analyze() {
     setLoading(true)
     setError(null)
     try {
+      // Store file for markup display
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setScreenshotForMarkup(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+      
       const formData = new FormData()
       formData.append('image', file)
       const res = await fetch('/api/analyze', { 
@@ -151,6 +159,48 @@ export default function Analyze() {
               </div>
             </div>
 
+            {/* Screenshot with Markup */}
+            {screenshotForMarkup && (
+              <div className="mb-8">
+                <h3 className="text-2xl font-bold text-white mb-4">Analysis Visualization</h3>
+                <Card>
+                  <div className="relative inline-block w-full">
+                    <img 
+                      src={screenshotForMarkup} 
+                      alt="Analyzed screenshot" 
+                      className="w-full rounded-lg border border-slate-600"
+                    />
+                    {/* Overlay boxes for detected elements */}
+                    {result.boxes && result.boxes.length > 0 && (
+                      <svg 
+                        className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                        style={{aspectRatio: 'auto'}}
+                      >
+                        {result.boxes.map((box, idx) => {
+                          const [x1, y1, x2, y2] = box
+                          if (!x1 || !y1 || !x2 || !y2) return null
+                          return (
+                            <rect
+                              key={idx}
+                              x={`${(x1 / 1000) * 100}%`}
+                              y={`${(y1 / 1000) * 100}%`}
+                              width={`${((x2-x1) / 1000) * 100}%`}
+                              height={`${((y2-y1) / 1000) * 100}%`}
+                              fill="none"
+                              stroke="#ef4444"
+                              strokeWidth="2"
+                              opacity="0.8"
+                            />
+                          )
+                        })}
+                      </svg>
+                    )}
+                  </div>
+                  <p className="text-slate-400 text-sm mt-2">Red boxes indicate detected suspicious elements</p>
+                </Card>
+              </div>
+            )}
+
             {/* Findings */}
             <div className="mb-8">
               <h3 className="text-2xl font-bold text-white mb-4">Analysis Findings</h3>
@@ -216,11 +266,13 @@ export default function Analyze() {
 
           {error && <Alert variant="error" title="Error">{error}</Alert>}
 
-          <Alert variant="info" className="mb-6" title="Reminder">
-            <p className="text-sm text-slate-200">
-              Our analysis blends machine learning and threat intelligence, but it can still be wrong. Double-check sensitive requests, and follow your organization&apos;s policies even when results look safe.
-            </p>
-          </Alert>
+          <div className="mb-6">
+            <Alert variant="info" title="Reminder">
+              <p className="text-sm text-slate-200">
+                Our analysis blends machine learning and threat intelligence, but it can still be wrong. Double-check sensitive requests, and follow your organization&apos;s policies even when results look safe.
+              </p>
+            </Alert>
+          </div>
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-slate-700">
@@ -314,15 +366,17 @@ export default function Analyze() {
           )}
 
           {/* Tips */}
-          <Alert variant="info" className="mt-8" title="💡 Analysis Tips">
-            <ul className="space-y-1 text-sm mt-2">
-              <li>• Look for official logos and branding</li>
-              <li>• Check sender email address carefully</li>
-              <li>• Hover over links to see actual URL</li>
-              <li>• Real companies never ask for passwords via email</li>
-              <li>• Look for urgency, fear, or unusual requests</li>
-            </ul>
-          </Alert>
+          <div className="mt-8">
+            <Alert variant="info" title="💡 Analysis Tips">
+              <ul className="space-y-1 text-sm mt-2">
+                <li>• Look for official logos and branding</li>
+                <li>• Check sender email address carefully</li>
+                <li>• Hover over links to see actual URL</li>
+                <li>• Real companies never ask for passwords via email</li>
+                <li>• Look for urgency, fear, or unusual requests</li>
+              </ul>
+            </Alert>
+          </div>
         </div>
         
         {showToast && (
