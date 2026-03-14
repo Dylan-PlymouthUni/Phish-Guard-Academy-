@@ -176,6 +176,14 @@ html {
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
   }
+
+  /* Prevent iOS/Safari auto-zoom when focusing small form fields */
+  input,
+  textarea,
+  select,
+  button {
+    font-size: 16px;
+  }
 }
 
 /* Print styles */
@@ -183,6 +191,19 @@ html {
   .no-print {
     display: none !important;
   }
+}
+
+/* Compact density mode */
+html[data-density='compact'] .max-w-6xl,
+html[data-density='compact'] .max-w-4xl {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
+html[data-density='compact'] .rounded-lg,
+html[data-density='compact'] .rounded-xl,
+html[data-density='compact'] .rounded-2xl {
+  border-radius: 0.65rem;
 }
 
 

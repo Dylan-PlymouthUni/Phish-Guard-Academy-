@@ -48,6 +48,8 @@ interface Settings {
   show_confidence?: boolean
   keyboard_shortcuts?: boolean
   font_size?: 'small' | 'medium' | 'large'
+  default_analyze_tab?: 'screenshot' | 'email' | 'url'
+  compact_layout?: boolean
 }
 
 const STORAGE_KEYS = {
@@ -82,7 +84,9 @@ const DEFAULT_SETTINGS: Settings = {
   daily_reminder: true,
   weekly_report: false,
   keyboard_shortcuts: true,
-  font_size: 'medium'
+  font_size: 'medium',
+  default_analyze_tab: 'screenshot',
+  compact_layout: false
 }
 
 // Progress Management

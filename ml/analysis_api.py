@@ -16,6 +16,11 @@ from ml.ensemble import PhishingEnsemble
 from ml.threat_intel import threat_intel
 from ml.behavioral_analysis import behavior_analyzer
 from ml.limiter import limiter
+from ml.api_screenshot_fix import (
+    analyze_screenshot_content,
+    risk_label_from_score,
+    risk_summary_from_score,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["analysis"])
@@ -54,6 +59,35 @@ def get_ensemble() -> PhishingEnsemble:
     return _ensemble
 
 
+def _normalize_risk_label(risk: int) -> str:
+    """Map numeric risk score to stable API labels used across clients."""
+    return risk_label_from_score(risk)
+
+
+def _normalize_risk_summary(risk: int) -> str:
+    return risk_summary_from_score(risk)
+
+
+def _screenshot_result_unreliable(result: "PredictionResult") -> bool:
+    """Detect when screenshot ensemble output is a placeholder/unavailable result."""
+    try:
+        if float(getattr(result, "confidence", 0.0) or 0.0) <= 0.01:
+            return True
+
+        findings = getattr(result, "findings", []) or []
+        for finding in findings:
+            if isinstance(finding, dict):
+                text = f"{finding.get('label', '')} {finding.get('detail', '')}".lower()
+            else:
+                text = str(finding).lower()
+            if "visual analysis unavailable" in text or "opencv" in text:
+                return True
+    except Exception:
+        return True
+
+    return False
+
+
 @router.post("/analyze")
 @limiter.limit("30/minute")
 async def analyze_with_persistence(
@@ -70,6 +104,20 @@ async def analyze_with_persistence(
         analysis_mode = "unknown"
         fallback_used = False
         response_payload = None
+        image_bytes = None
+
+        if image is not None:
+            image_bytes = await image.read()
+
+        if not text and not url and image is None:
+            try:
+                body = await request.json()
+                if isinstance(body, dict):
+                    text = str(body.get("text") or "")
+                    url = str(body.get("url") or "")
+            except Exception:
+                # Not a JSON request body; continue using form values.
+                pass
 
         # Try ML ensemble first
         try:
@@ -80,9 +128,8 @@ async def analyze_with_persistence(
                 # Load image
                 import io
                 from PIL import Image
-                image_bytes = await image.read()
                 pil_image = Image.open(io.BytesIO(image_bytes))
-                result = ensemble.analyze_full_context(url=url, text=text, screenshot=pil_image)
+                result = ensemble.analyze_full_context(url=url, text=text, image=pil_image)
                 analysis_mode = "full"
             elif url and text:
                 result = ensemble.analyze_text(text=text, url=url)
@@ -97,17 +144,29 @@ async def analyze_with_persistence(
                 # Load image
                 import io
                 from PIL import Image
-                image_bytes = await image.read()
                 pil_image = Image.open(io.BytesIO(image_bytes))
-                result = ensemble.analyze_screenshot(screenshot=pil_image)
+                result = ensemble.analyze_screenshot(image=pil_image)
                 analysis_mode = "screenshot"
+
+                # If visual stack is unavailable (e.g. OpenCV missing),
+                # force screenshot fallback instead of returning a misleading 0% safe.
+                if _screenshot_result_unreliable(result) and image_bytes:
+                    screenshot_fallback = analyze_screenshot_content(image_bytes)
+                    response_payload = {
+                        "risk": int(screenshot_fallback.get("risk", 5)),
+                        "risk_label": screenshot_fallback.get("risk_label") or _normalize_risk_label(int(screenshot_fallback.get("risk", 5))),
+                        "risk_summary": screenshot_fallback.get("risk_summary") or _normalize_risk_summary(int(screenshot_fallback.get("risk", 5))),
+                        "confidence": 0.55,
+                        "findings": screenshot_fallback.get("findings", []),
+                        "boxes": screenshot_fallback.get("boxes", [])
+                    }
             else:
                 raise HTTPException(status_code=400, detail="No input provided")
             
             # Format findings for frontend
             formatted_findings = []
             all_boxes = []
-            
+
             for finding in result.findings:
                 # Handle new structured finding format
                 if isinstance(finding, dict):
@@ -152,11 +211,15 @@ async def analyze_with_persistence(
                         "boxes": []
                     })
             
-            response_payload = {
-                "risk": int(result.risk_score),
-                "findings": formatted_findings,
-                "boxes": all_boxes
-            }
+            if not response_payload:
+                response_payload = {
+                    "risk": int(result.risk_score),
+                    "risk_label": _normalize_risk_label(int(result.risk_score)),
+                    "risk_summary": _normalize_risk_summary(int(result.risk_score)),
+                    "confidence": round(float(result.confidence), 3),
+                    "findings": formatted_findings,
+                    "boxes": all_boxes
+                }
             
         except Exception as ml_error:
             logger.warning(f"ML ensemble failed, using fallback with threat intel: {ml_error}")
@@ -167,6 +230,14 @@ async def analyze_with_persistence(
             combined = f"{text} {url}".lower()
             findings = []
             risk = 5
+
+            if image is not None and image_bytes:
+                try:
+                    screenshot_fallback = analyze_screenshot_content(image_bytes)
+                    findings.extend(screenshot_fallback.get("findings", []))
+                    risk = max(risk, int(screenshot_fallback.get("risk", 5)))
+                except Exception as screenshot_err:
+                    logger.error(f"Screenshot fallback failed: {screenshot_err}")
             
             # THREAT INTELLIGENCE CHECK (HIGH PRIORITY)
             if url:
@@ -248,6 +319,9 @@ async def analyze_with_persistence(
             
             response_payload = {
                 "risk": min(98, max(5, risk)),
+                "risk_label": _normalize_risk_label(min(98, max(5, risk))),
+                "risk_summary": _normalize_risk_summary(min(98, max(5, risk))),
+                "confidence": 0.45 if image is not None else 0.5,
                 "findings": findings,
                 "boxes": []
             }

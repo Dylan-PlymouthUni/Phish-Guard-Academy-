@@ -4,7 +4,7 @@ import { MainLayout } from '../components/layout/MainLayout'
 import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
-import { getProgress } from '../utils/storage'
+import { getProgress, saveProgress } from '../utils/storage'
 
 interface Analysis {
   id: string
@@ -45,7 +45,9 @@ export default function History() {
   }
 
   const deleteAnalysis = (id: string) => {
-    setAnalyses(analyses.filter(a => a.id !== id))
+    const updatedAnalyses = analyses.filter(a => a.id !== id)
+    setAnalyses(updatedAnalyses)
+    saveProgress({ analyses_performed: updatedAnalyses as any })
   }
 
   const exportHistory = () => {

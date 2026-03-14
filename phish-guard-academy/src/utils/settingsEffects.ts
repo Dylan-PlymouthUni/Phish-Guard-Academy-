@@ -126,8 +126,12 @@ export const scheduleDailyReminder = () => {
 
 // Font size application
 export const applyFontSize = (size: 'small' | 'medium' | 'large') => {
-  const fontSize = size === 'small' ? '14px' : size === 'large' ? '18px' : '16px'
+  const fontSize = size === 'small' ? '15px' : size === 'large' ? '17px' : '16px'
   document.documentElement.style.fontSize = fontSize
+}
+
+export const applyCompactLayout = (compact: boolean) => {
+  document.documentElement.setAttribute('data-density', compact ? 'compact' : 'comfortable')
 }
 
 // Initialize all settings on app load
@@ -138,6 +142,8 @@ export const initializeSettings = () => {
   if (settings.font_size) {
     applyFontSize(settings.font_size as 'small' | 'medium' | 'large')
   }
+
+  applyCompactLayout(!!settings.compact_layout)
   
   // Setup daily reminders
   scheduleDailyReminder()

@@ -74,11 +74,6 @@ export default function Challenges() {
   const challengeList = (challenges && challenges.length > 0 ? challenges : FALLBACK_CHALLENGES)
   const usingFallback = !loading && (!challenges || challenges.length === 0 || !!error)
 
-  // DEBUG: Show alert when component mounts
-  useEffect(() => {
-    console.log('🎯 Challenges page loaded! Challenges:', challenges?.length || 0)
-  }, [challenges])
-
   useEffect(() => {
     if (!started || !selectedChallenge || timeLeft <= 0) return
     const timer = setInterval(() => setTimeLeft(t => t - 1), 1000)
@@ -136,7 +131,7 @@ export default function Challenges() {
         completeChallenge(selectedChallenge.id, selectedChallenge.points, passed)
         // Refresh user stats to get updated XP
         await refreshUser()
-        setToastMessage(passed ? `🎉 Challenge passed! +${selectedChallenge.points} points earned!` : `💪 Keep trying! You can retake this challenge.`)
+        setToastMessage(passed ? `Challenge passed. +${selectedChallenge.points} points earned.` : 'Keep trying. You can retake this challenge.')
         setShowToast(true)
         return
       }
@@ -151,7 +146,7 @@ export default function Challenges() {
     completeChallenge(selectedChallenge.id, selectedChallenge.points, data.passed)
     // Refresh user stats even in offline mode
     await refreshUser()
-    setToastMessage(data.passed ? `🎉 Challenge passed! +${selectedChallenge.points} points earned!` : `💪 Keep trying! You can retake this challenge.`)
+    setToastMessage(data.passed ? `Challenge passed. +${selectedChallenge.points} points earned.` : 'Keep trying. You can retake this challenge.')
     setShowToast(true)
   }
 
@@ -274,7 +269,7 @@ export default function Challenges() {
               {result.passed ? <Trophy className="w-16 h-16 mx-auto text-green-400" /> : <XCircle className="w-16 h-16 mx-auto text-red-400" />}
             </div>
             <h1 className={`text-4xl font-bold mb-2 ${result.passed ? 'text-green-400' : 'text-red-400'}`}>
-              {result.passed ? 'Challenge Passed! 🎉' : 'Keep Trying'}
+              {result.passed ? 'Challenge Passed' : 'Keep Trying'}
             </h1>
             <p className={`text-2xl font-bold mb-6 ${result.passed ? 'text-green-300' : 'text-red-300'}`}>
               {result.score}%

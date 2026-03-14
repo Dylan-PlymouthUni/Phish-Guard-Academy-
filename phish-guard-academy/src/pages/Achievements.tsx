@@ -5,6 +5,7 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { getAnalytics } from '../utils/storage'
 
 interface AchievementItem {
   id: string
@@ -21,6 +22,44 @@ export default function Achievements() {
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all')
   const { token } = useAuth()
   const API_URL = (import.meta as any)?.env?.VITE_API_URL ?? ''
+
+  const buildLocalAchievements = (): AchievementItem[] => {
+    const analytics = getAnalytics()
+    return [
+      {
+        id: 'first-analysis',
+        title: 'First Analysis',
+        description: 'Complete your first analysis.',
+        icon: 'A1',
+        points: 50,
+        unlocked: analytics.total_analyses >= 1,
+      },
+      {
+        id: 'threat-hunter',
+        title: 'Threat Hunter',
+        description: 'Detect 10 high-risk phishing attempts.',
+        icon: 'TH',
+        points: 150,
+        unlocked: analytics.high_risk_count >= 10,
+      },
+      {
+        id: 'learning-enthusiast',
+        title: 'Learning Enthusiast',
+        description: 'Complete 5 learning lessons.',
+        icon: 'LE',
+        points: 120,
+        unlocked: analytics.lessons_completed >= 5,
+      },
+      {
+        id: 'challenge-master',
+        title: 'Challenge Master',
+        description: 'Pass 3 challenges.',
+        icon: 'CM',
+        points: 180,
+        unlocked: analytics.challenges_passed >= 3,
+      },
+    ]
+  }
 
   useEffect(() => {
     loadAchievements()
@@ -45,7 +84,7 @@ export default function Achievements() {
   const loadAchievements = async () => {
     try {
       if (!token) {
-        setAchievements([])
+        setAchievements(buildLocalAchievements())
         setLoading(false)
         return
       }
@@ -59,7 +98,7 @@ export default function Achievements() {
       setAchievements(data.achievements || [])
     } catch (err) {
       console.error('Achievements error', err)
-      setAchievements([])
+      setAchievements(buildLocalAchievements())
     } finally {
       setLoading(false)
     }
@@ -75,6 +114,7 @@ export default function Achievements() {
   const totalPoints = achievements
     .filter(a => a.unlocked)
     .reduce((sum, a) => sum + a.points, 0)
+  const completionPercent = achievements.length > 0 ? Math.round((unlockedCount / achievements.length) * 100) : 0
 
   if (loading) {
     return (
@@ -112,7 +152,7 @@ export default function Achievements() {
                 <div className="mt-3 w-full bg-slate-700 rounded-full h-2 overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-500"
-                    style={{ width: `${(unlockedCount / achievements.length) * 100}%` }}
+                    style={{ width: `${completionPercent}%` }}
                   ></div>
                 </div>
               </CardContent>
@@ -140,11 +180,11 @@ export default function Achievements() {
                   <Badge variant="success">Completion</Badge>
                 </div>
                 <p className="text-4xl font-bold text-white mb-1">
-                  {achievements.length > 0 ? Math.round((unlockedCount / achievements.length) * 100) : 0}%
+                  {completionPercent}%
                 </p>
                 <p className="text-sm text-slate-400">Overall progress</p>
                 <div className="mt-3 text-center">
-                  <p className="text-xs text-green-400 font-semibold">Keep going!</p>
+                  <p className="text-xs text-green-400 font-semibold">{completionPercent === 100 ? 'All milestones unlocked' : 'Keep going'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -162,7 +202,7 @@ export default function Achievements() {
                     : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700'
                 }`}
               >
-                {f === 'all' ? 'All' : f === 'unlocked' ? '✓ Unlocked' : '🔒 Locked'}
+                {f === 'all' ? 'All' : f === 'unlocked' ? 'Unlocked' : 'Locked'}
               </button>
             ))}
             <span className="text-sm text-slate-400 ml-auto py-2">
@@ -260,7 +300,7 @@ export default function Achievements() {
               <p className="text-slate-500 text-sm">
                 {filter === 'unlocked'
                   ? 'Complete challenges and analyses to unlock achievements!'
-                  : 'All achievements unlocked! 🎉'}
+                  : 'All achievements unlocked.'}
               </p>
             </div>
           )}
@@ -274,14 +314,14 @@ export default function Achievements() {
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="flex gap-3">
-                  <span className="text-yellow-400 font-bold">📊</span>
+                  <span className="text-yellow-400 font-bold">1.</span>
                   <div>
                     <h3 className="text-white font-semibold">Analyze Regularly</h3>
                     <p className="text-sm text-slate-400">Perform phishing analyses to unlock First Steps and Analysis Master</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-purple-400 font-bold">⚔️</span>
+                  <span className="text-purple-400 font-bold">2.</span>
                   <div>
                     <h3 className="text-white font-semibold">Take Challenges</h3>
                     <p className="text-sm text-slate-400">Complete security challenges to earn Challenge Master and Perfect Score</p>
@@ -290,14 +330,14 @@ export default function Achievements() {
               </div>
               <div className="space-y-4">
                 <div className="flex gap-3">
-                  <span className="text-green-400 font-bold">🔥</span>
+                  <span className="text-green-400 font-bold">3.</span>
                   <div>
                     <h3 className="text-white font-semibold">Build a Streak</h3>
                     <p className="text-sm text-slate-400">Stay active daily to maintain your streak and unlock the On Fire badge</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-blue-400 font-bold">📚</span>
+                  <span className="text-blue-400 font-bold">4.</span>
                   <div>
                     <h3 className="text-white font-semibold">Learn & Level Up</h3>
                     <p className="text-sm text-slate-400">Complete lessons to unlock Knowledge Seeker and reach higher levels</p>

@@ -47,6 +47,9 @@ export interface UserSettings {
 
 export interface AnalysisResult {
   risk: number
+  risk_label?: 'likely_phishing' | 'needs_verification' | 'likely_safe'
+  risk_summary?: string
+  confidence?: number
   findings: Finding[]
   boxes?: any[]
 }

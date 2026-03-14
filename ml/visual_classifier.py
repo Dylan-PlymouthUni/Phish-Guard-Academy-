@@ -11,7 +11,13 @@ from io import BytesIO
 
 import numpy as np
 from PIL import Image
-import cv2
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except Exception as e:
+    cv2 = None  # Optional dependency
+    CV2_AVAILABLE = False
+    logging.warning(f"OpenCV not available. Visual analysis will be limited: {e}")
 
 try:
     import torch
@@ -129,6 +135,19 @@ class VisualPhishingDetector:
             'findings': []
         }
         
+        if not CV2_AVAILABLE or cv2 is None:
+            result['risk'] = 0
+            result['confidence'] = 0.0
+            result['findings'] = [
+                {
+                    'type': 'system',
+                    'label': 'Visual analysis unavailable',
+                    'detail': 'OpenCV dependencies are not installed on this environment.',
+                    'severity': 'low'
+                }
+            ]
+            return result
+
         # Convert to numpy for OpenCV operations
         img_array = np.array(image)
         if len(img_array.shape) == 2:  # Grayscale
@@ -907,29 +926,47 @@ def extract_screenshot_features(image: Image.Image) -> Dict[str, float]:
     This maintains backward compatibility with existing code
     """
     img_array = np.array(image)
-    
+
     # Ensure RGB
     if len(img_array.shape) == 2:
-        img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
+        if CV2_AVAILABLE and cv2 is not None:
+            img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
+        else:
+            img_array = np.stack([img_array, img_array, img_array], axis=-1)
     elif img_array.shape[2] == 4:
-        img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
-    
-    # Color features
-    hsv = cv2.cvtColor(img_array, cv2.COLOR_RGB2HSV)
-    color_variance = float(np.var(hsv))
-    
-    # Edge detection
-    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-    edges = cv2.Canny(gray, 50, 150)
-    edge_density = float(np.sum(edges > 0) / edges.size)
-    
-    # Text density (variance)
-    text_density = float(np.var(gray))
-    
+        img_array = img_array[:, :, :3]
+
+    if CV2_AVAILABLE and cv2 is not None:
+        # Color features
+        hsv = cv2.cvtColor(img_array, cv2.COLOR_RGB2HSV)
+        color_variance = float(np.var(hsv))
+
+        # Edge detection
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        edge_density = float(np.sum(edges > 0) / edges.size)
+
+        # Text density (variance)
+        text_density = float(np.var(gray))
+        image_entropy = float(cv2.calcHist([gray], [0], None, [256], [0, 256]).var())
+    else:
+        # Lightweight fallback that does not depend on OpenCV.
+        gray = (0.299 * img_array[:, :, 0] + 0.587 * img_array[:, :, 1] + 0.114 * img_array[:, :, 2]).astype(np.float32)
+        color_variance = float(np.var(img_array))
+
+        grad_x = np.abs(np.diff(gray, axis=1, prepend=gray[:, :1]))
+        grad_y = np.abs(np.diff(gray, axis=0, prepend=gray[:1, :]))
+        grad = grad_x + grad_y
+        edge_density = float(np.mean(grad > 25.0))
+
+        text_density = float(np.var(gray))
+        hist, _ = np.histogram(gray, bins=256, range=(0, 255))
+        image_entropy = float(np.var(hist))
+
     return {
         'color_variance': color_variance,
         'edge_density': edge_density,
         'text_density': text_density,
         'mean_brightness': float(np.mean(gray)),
-        'image_entropy': float(cv2.calcHist([gray], [0], None, [256], [0, 256]).var())
+        'image_entropy': image_entropy
     }

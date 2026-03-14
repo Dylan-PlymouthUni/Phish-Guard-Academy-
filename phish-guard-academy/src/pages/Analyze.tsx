@@ -7,20 +7,22 @@ import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Toast } from '../components/ui/Toast'
 import { AnalysisResult } from '../types'
-import { recordAnalysis } from '../utils/storage'
+import { getSettings, recordAnalysis } from '../utils/storage'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Analyze() {
+  const initialTab = (getSettings().default_analyze_tab || 'screenshot') as 'screenshot' | 'email' | 'url'
   const [file, setFile] = useState<File | null>(null)
   const [url, setUrl] = useState('')
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<AnalysisResult | null>(null)
-  const [activeTab, setActiveTab] = useState<'screenshot' | 'email' | 'url'>('screenshot')
+  const [activeTab, setActiveTab] = useState<'screenshot' | 'email' | 'url'>(initialTab)
   const [error, setError] = useState<string | null>(null)
   const [showToast, setShowToast] = useState(false)
   const [screenshotForMarkup, setScreenshotForMarkup] = useState<string | null>(null)
   const { refreshUser, token } = useAuth()
+  const showConfidence = getSettings().show_confidence !== false
 
   const analyzeScreenshot = async () => {
     if (!file) return
@@ -65,13 +67,15 @@ export default function Analyze() {
   }
 
   const analyzeText = async () => {
-    if (!text && !url) return
+    const cleanText = text.trim()
+    const cleanUrl = url.trim()
+    if (!cleanText && !cleanUrl) return
     setLoading(true)
     setError(null)
     try {
       const formData = new FormData()
-      formData.append('text', text)
-      formData.append('url', url)
+      formData.append('text', cleanText)
+      formData.append('url', cleanUrl)
       const res = await fetch('/api/analyze', { 
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -89,7 +93,7 @@ export default function Analyze() {
         // Refresh user stats to get updated XP
         await refreshUser()
       } else {
-        setError('Failed to analyze')
+        setError('Analysis failed. Please check the input and try again.')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error analyzing')
@@ -104,6 +108,29 @@ export default function Analyze() {
     return 'text-green-500'
   }
 
+  const getRiskLabel = (percent: number) => {
+    if (percent >= 70) return 'LIKELY PHISHING'
+    if (percent >= 40) return 'NEEDS VERIFICATION'
+    return 'LOW RISK'
+  }
+
+  const getRiskLabelFromApi = (resultData: AnalysisResult) => {
+    if (resultData.risk_label === 'likely_phishing') return 'LIKELY PHISHING'
+    if (resultData.risk_label === 'needs_verification') return 'NEEDS VERIFICATION'
+    if (resultData.risk_label === 'likely_safe') return 'LOW RISK'
+    return getRiskLabel(resultData.risk)
+  }
+
+  const getRiskSummary = (percent: number) => {
+    if (percent >= 70) {
+      return 'Multiple high-risk signals were detected. Treat this as suspicious until verified through a trusted channel.'
+    }
+    if (percent >= 40) {
+      return 'Some warning signals were detected. Verify the sender, destination, and request before taking action.'
+    }
+    return 'No strong phishing indicators were detected. Continue with normal caution for sensitive actions.'
+  }
+
   const getRiskBg = (percent: number) => {
     if (percent >= 70) return 'bg-red-500/10 border-red-500/30'
     if (percent >= 40) return 'bg-orange-500/10 border-orange-500/30'
@@ -113,28 +140,28 @@ export default function Analyze() {
   const getRecommendations = (percent: number) => {
     if (percent >= 70) {
       return [
-        '⛔ DO NOT click any links or download attachments',
-        '⛔ DO NOT enter personal or financial information',
-        '🔴 Report to your IT/Security team immediately',
-        '🔴 Mark as spam/phishing if possible',
-        '📸 Take a screenshot for your records',
+        'Do not click links or open attachments.',
+        'Do not enter passwords, payment details, or verification codes.',
+        'Report the message to IT or your security contact.',
+        'If this is an account alert, open the official website manually.',
+        'Keep a screenshot if you need to escalate the incident.',
       ]
     }
     if (percent >= 40) {
       return [
-        '⚠️ Be cautious before clicking links',
-        '⚠️ Verify the sender through another method',
-        '⚠️ Hover over links to see actual URL',
-        '⚠️ Check for spelling/grammar errors',
-        '⚠️ Contact your IT team if unsure',
+        'Pause before interacting with links or attachments.',
+        'Verify the sender using a known phone number or official site.',
+        'Inspect links carefully for misspellings or unexpected domains.',
+        'Check whether the message creates unusual urgency or pressure.',
+        'Escalate to IT/security if anything feels off.',
       ]
     }
     return [
-      '✅ Appears to be legitimate',
-      '✅ Safe to interact with cautiously',
-      '✅ Standard security practices still apply',
-      '✅ Keep antivirus/firewall enabled',
-      '✅ Report suspicious emails even if they pass checks',
+      'No strong phishing indicators were found in this sample.',
+      'Proceed normally, but verify unusual payment or credential requests.',
+      'Prefer navigating to important services directly instead of via links.',
+      'Keep endpoint protection and browser updates enabled.',
+      'Report suspicious messages even when risk is low.',
     ]
   }
 
@@ -152,8 +179,16 @@ export default function Analyze() {
                 <div>
                   <p className={`text-5xl font-bold mb-2 ${getRiskColor(risk)}`}>{risk}%</p>
                   <p className={`text-2xl font-bold ${getRiskColor(risk)}`}>
-                    {risk >= 70 ? 'HIGH RISK' : risk >= 40 ? 'MEDIUM RISK' : 'SAFE'}
+                    {getRiskLabelFromApi(result)}
                   </p>
+                  <p className="mt-3 max-w-2xl text-slate-300 text-sm">
+                    {result.risk_summary || getRiskSummary(risk)}
+                  </p>
+                  {showConfidence && typeof result.confidence === 'number' && result.confidence > 0.05 && (
+                    <p className="mt-2 text-xs text-slate-400">
+                      Model confidence: {Math.round(result.confidence * 100)}%
+                    </p>
+                  )}
                 </div>
                 <div className="text-6xl">{risk >= 70 ? '🚨' : risk >= 40 ? '⚠️' : '✅'}</div>
               </div>
@@ -168,7 +203,7 @@ export default function Analyze() {
                     <img 
                       src={screenshotForMarkup} 
                       alt="Analyzed screenshot" 
-                      className="w-full rounded-lg border border-slate-600"
+                      className="w-full max-h-[70vh] object-contain rounded-lg border border-slate-600 bg-slate-900"
                     />
                     {/* Overlay boxes for detected elements */}
                     {result.boxes && result.boxes.length > 0 && (
@@ -221,7 +256,7 @@ export default function Analyze() {
                         <p className="text-slate-400 text-sm">{finding.detail}</p>
                       </div>
                       <Badge variant={
-                        finding.severity === 'high' ? 'error' :
+                        finding.severity === 'high' ? 'danger' :
                         finding.severity === 'med' ? 'warning' :
                         'success'
                       }>
@@ -237,7 +272,7 @@ export default function Analyze() {
             <Alert variant={risk >= 70 ? 'error' : risk >= 40 ? 'warning' : 'success'} title="What You Should Do">
               <ul className="space-y-2 mt-2">
                 {recommendations.map((rec, i) => (
-                  <li key={i} className="text-white">{rec}</li>
+                  <li key={i} className="text-white">• {rec}</li>
                 ))}
               </ul>
             </Alert>
@@ -305,7 +340,7 @@ export default function Analyze() {
                 >
                   <Eye className="w-12 h-12 text-slate-400 mx-auto mb-4" />
                   <p className="text-white font-bold mb-2">Drop screenshot here or click to browse</p>
-                  <p className="text-slate-400 text-sm">PNG, JPG, GIF up to 8MB</p>
+                  <p className="text-slate-400 text-sm">PNG, JPG, JPEG, GIF, WEBP up to 8MB</p>
                   <input
                     type="file"
                     accept="image/*"
@@ -340,7 +375,7 @@ export default function Analyze() {
                   placeholder="Paste email content here..."
                   className="w-full h-40 p-4 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 mb-4"
                 />
-                <Button onClick={analyzeText} disabled={!text || loading} fullWidth>
+                <Button onClick={analyzeText} disabled={!text.trim() || loading} fullWidth>
                   {loading ? 'Analyzing...' : 'Analyze Email'}
                 </Button>
               </CardContent>
@@ -358,7 +393,7 @@ export default function Analyze() {
                   placeholder="https://example.com"
                   className="w-full p-4 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 mb-4"
                 />
-                <Button onClick={analyzeText} disabled={!url || loading} fullWidth>
+                <Button onClick={analyzeText} disabled={!url.trim() || loading} fullWidth>
                   {loading ? 'Checking...' : 'Check URL'}
                 </Button>
               </CardContent>
@@ -369,11 +404,11 @@ export default function Analyze() {
           <div className="mt-8">
             <Alert variant="info" title="💡 Analysis Tips">
               <ul className="space-y-1 text-sm mt-2">
-                <li>• Look for official logos and branding</li>
-                <li>• Check sender email address carefully</li>
-                <li>• Hover over links to see actual URL</li>
-                <li>• Real companies never ask for passwords via email</li>
-                <li>• Look for urgency, fear, or unusual requests</li>
+                <li>• Check sender domains carefully, not just display names.</li>
+                <li>• Verify urgent requests through a separate trusted channel.</li>
+                <li>• Inspect links for misspellings and lookalike domains.</li>
+                <li>• Avoid entering credentials from email or message links.</li>
+                <li>• Report suspicious content even when risk appears low.</li>
               </ul>
             </Alert>
           </div>

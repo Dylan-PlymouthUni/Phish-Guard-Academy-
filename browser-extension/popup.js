@@ -69,7 +69,7 @@ async function analyzeURL(url) {
   } catch (error) {
     resultContent.innerHTML = `
       <div style="color: #ef4444; font-size: 14px;">
-        ⚠️ Analysis failed. Make sure the PhishGuard API is running on localhost:8000
+        Analysis failed. Check your API URL in extension settings and try again.
       </div>
     `
     resultDiv.classList.add('show')
@@ -84,18 +84,29 @@ function displayResult(data) {
   const resultDiv = document.getElementById('result')
   const resultContent = document.getElementById('resultContent')
   
-  const riskScore = data.risk_score || 0
+  const riskScore = data.risk ?? data.risk_score ?? 0
   let riskClass, riskLabel
-  
+  const apiRiskLabel = data.risk_label
+
+  if (apiRiskLabel === 'likely_phishing') {
+    riskClass = 'risk-high'
+    riskLabel = `Likely phishing (${riskScore}%)`
+  } else if (apiRiskLabel === 'needs_verification') {
+    riskClass = 'risk-medium'
+    riskLabel = `Needs verification (${riskScore}%)`
+  } else if (apiRiskLabel === 'likely_safe') {
+    riskClass = 'risk-safe'
+    riskLabel = `Likely safe (${riskScore}%)`
+  } else
   if (riskScore >= 70) {
     riskClass = 'risk-high'
-    riskLabel = `⚠️ High Risk (${riskScore}%)`
+    riskLabel = `Likely phishing (${riskScore}%)`
   } else if (riskScore >= 40) {
     riskClass = 'risk-medium'
-    riskLabel = `⚡ Medium Risk (${riskScore}%)`
+    riskLabel = `Needs verification (${riskScore}%)`
   } else {
     riskClass = 'risk-safe'
-    riskLabel = `✅ Low Risk (${riskScore}%)`
+    riskLabel = `Likely safe (${riskScore}%)`
   }
   
   let findingsHTML = ''
@@ -107,6 +118,7 @@ function displayResult(data) {
   
   resultContent.innerHTML = `
     <span class="risk-badge ${riskClass}">${riskLabel}</span>
+    ${data.risk_summary ? `<div style="margin-top:8px;font-size:12px;line-height:1.4;color:#cbd5e1;">${data.risk_summary}</div>` : ''}
     ${findingsHTML}
   `
   

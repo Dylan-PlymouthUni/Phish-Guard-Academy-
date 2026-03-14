@@ -5,13 +5,19 @@ chrome.runtime.onInstalled.addListener(() => {
     title: 'Analyze with PhishGuard',
     contexts: ['link']
   })
-  
+
   chrome.contextMenus.create({
     id: 'analyzePage',
     title: 'Analyze this page',
     contexts: ['page']
   })
 })
+
+function getRiskLabel(riskScore) {
+  if (riskScore >= 70) return 'Likely phishing'
+  if (riskScore >= 40) return 'Needs verification'
+  return 'Likely safe'
+}
 
 // Get API URL from storage or use default
 function getApiUrl() {
@@ -23,12 +29,12 @@ function getApiUrl() {
 }
 
 // Handle context menu clicks
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info) => {
   const url = info.linkUrl || info.pageUrl
   const apiUrl = await getApiUrl()
-  
+
   if (!url) return
-  
+
   try {
     const response = await fetch(`${apiUrl}/api/analyze`, {
       method: 'POST',
@@ -37,30 +43,33 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       },
       body: JSON.stringify({ url })
     })
-    
+
     const data = await response.json()
     const riskScore = data.risk || 0
-    
+    const riskLabel = data.risk_label
+      ? data.risk_label.replace('_', ' ')
+      : getRiskLabel(riskScore).toLowerCase()
+
     // Update badge
     if (riskScore >= 70) {
       chrome.action.setBadgeBackgroundColor({ color: '#ef4444' })
-      chrome.action.setBadgeText({ text: '⚠️' })
+      chrome.action.setBadgeText({ text: '!' })
     } else if (riskScore >= 40) {
       chrome.action.setBadgeBackgroundColor({ color: '#f97316' })
-      chrome.action.setBadgeText({ text: '⚡' })
+      chrome.action.setBadgeText({ text: '?' })
     } else {
       chrome.action.setBadgeBackgroundColor({ color: '#22c55e' })
-      chrome.action.setBadgeText({ text: '✓' })
+      chrome.action.setBadgeText({ text: 'OK' })
     }
-    
+
     // Show notification
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.svg',
       title: 'PhishGuard Analysis',
-      message: `Risk Level: ${riskScore}% - ${riskScore >= 70 ? 'HIGH' : riskScore >= 40 ? 'MEDIUM' : 'LOW'}`
+      message: `${riskScore}% risk: ${riskLabel}`
     })
-    
+
     // Store result for popup
     chrome.storage.session.set({
       lastAnalysis: {
@@ -75,15 +84,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       type: 'basic',
       iconUrl: 'icons/icon128.svg',
       title: 'PhishGuard Error',
-      message: 'Failed to analyze URL. Check connection.'
+      message: 'Failed to analyze URL. Check API connection.'
     })
-  }
-})
-
-      message: `Risk Score: ${riskScore}% - ${riskScore >= 70 ? 'High Risk' : riskScore >= 40 ? 'Medium Risk' : 'Safe'}`
-    })
-  } catch (error) {
-    console.error('Analysis failed:', error)
   }
 })
 

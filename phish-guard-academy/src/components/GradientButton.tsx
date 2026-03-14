@@ -8,7 +8,7 @@ interface GradientButtonProps {
   className?: string;
 }
 
-export function GradientButton({
+function GradientButton({
   children,
   onClick,
   disabled = false,
@@ -36,4 +36,6 @@ export function GradientButton({
       {children}
     </button>
   );
-} 
+}
+
+export default GradientButton;

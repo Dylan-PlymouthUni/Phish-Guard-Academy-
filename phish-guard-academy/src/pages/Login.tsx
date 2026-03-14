@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { GradientButton } from '../components/GradientButton';
+import GradientButton from '../components/GradientButton';
 import toast from 'react-hot-toast';
 
 export default function Login() {
@@ -106,18 +106,12 @@ export default function Login() {
                 />
               </div>
 
-              <button
-                type="submit"
+              <GradientButton
                 disabled={isLoading}
                 className="w-full py-2"
               >
-                <GradientButton
-                  disabled={isLoading}
-                  className="w-full py-2"
-                >
-                  {isLoading ? 'Logging in...' : 'Login'}
-                </GradientButton>
-              </button>
+                {isLoading ? 'Logging in...' : 'Login'}
+              </GradientButton>
             </form>
           ) : (
             <form onSubmit={handleMfaSubmit} className="space-y-4">
@@ -154,18 +148,12 @@ export default function Login() {
                 <p className="text-xs text-slate-500 mt-1">Use only if you can’t access your authenticator app.</p>
               </div>
 
-              <button
-                type="submit"
+              <GradientButton
                 disabled={isLoading}
                 className="w-full py-2"
               >
-                <GradientButton
-                  disabled={isLoading}
-                  className="w-full py-2"
-                >
-                  {isLoading ? 'Verifying...' : 'Verify & Sign in'}
-                </GradientButton>
-              </button>
+                {isLoading ? 'Verifying...' : 'Verify & Sign in'}
+              </GradientButton>
             </form>
           )}
 

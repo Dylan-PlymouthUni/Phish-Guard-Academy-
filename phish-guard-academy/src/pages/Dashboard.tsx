@@ -167,7 +167,7 @@ export default function Dashboard() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [token])
 
-  const detectionRate = stats.total > 0 ? ((stats.flagged / stats.total) * 100).toFixed(1) : '0'
+  const threatRate = stats.total > 0 ? ((stats.flagged / stats.total) * 100).toFixed(1) : '0'
   const levelInfo = getLevelInfo(userXP)
   const xpProgress = levelInfo.xpProgress
 
@@ -371,13 +371,13 @@ export default function Dashboard() {
               <CardContent>
                 <div className="flex items-center justify-between mb-3">
                   <Activity className="w-5 h-5 text-cyan-400" />
-                  <Badge variant="info">Rate</Badge>
+                  <Badge variant="info">Suspicious</Badge>
                 </div>
-                <p className="text-4xl font-bold text-white mb-1">{detectionRate}%</p>
-                <p className="text-sm text-slate-400">Detection accuracy</p>
+                <p className="text-4xl font-bold text-white mb-1">{threatRate}%</p>
+                <p className="text-sm text-slate-400">of scans came back suspicious</p>
                 <div className="mt-3 flex items-center gap-2">
                   <Brain className="w-4 h-4 text-cyan-400" />
-                  <span className="text-xs text-cyan-400 font-semibold">Advanced Protection</span>
+                  <span className="text-xs text-cyan-400 font-semibold">{stats.flagged} of {stats.total} flagged</span>
                 </div>
               </CardContent>
             </Card>

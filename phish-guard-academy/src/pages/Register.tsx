@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { GradientButton } from '../components/GradientButton';
+import GradientButton from '../components/GradientButton';
 import toast from 'react-hot-toast';
 
 export default function Register() {
@@ -127,18 +127,12 @@ export default function Register() {
               />
             </div>
 
-            <button
-              type="submit"
+            <GradientButton
               disabled={isLoading || isPasswordTooLong}
               className="w-full py-2"
             >
-              <GradientButton
-                disabled={isLoading || isPasswordTooLong}
-                className="w-full py-2"
-              >
-                {isLoading ? 'Creating account...' : 'Create Account'}
-              </GradientButton>
-            </button>
+              {isLoading ? 'Creating account...' : 'Create Account'}
+            </GradientButton>
           </form>
 
           <div className="mt-6 border-t border-slate-700 pt-6">

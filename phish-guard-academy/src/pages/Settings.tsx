@@ -9,6 +9,7 @@ import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Toast } from '../components/ui/Toast'
 import { getSettings, saveSettings as saveToStorage, resetSettings as resetToDefaults, exportAllData, resetAllData } from '../utils/storage'
+import { applyCompactLayout, applyFontSize } from '../utils/settingsEffects'
 import { useAuth } from '../contexts/AuthContext'
 
 interface Settings {
@@ -27,6 +28,8 @@ interface Settings {
   show_confidence?: boolean
   keyboard_shortcuts?: boolean
   font_size?: 'small' | 'medium' | 'large'
+  default_analyze_tab?: 'screenshot' | 'email' | 'url'
+  compact_layout?: boolean
 }
 
 export default function SettingsPage() {
@@ -47,7 +50,9 @@ export default function SettingsPage() {
     auto_analyze: true,
     show_confidence: true,
     keyboard_shortcuts: true,
-    font_size: 'medium'
+    font_size: 'medium',
+    default_analyze_tab: 'screenshot',
+    compact_layout: false
   })
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'general' | 'notifications' | 'ml' | 'data'>('general')
@@ -58,6 +63,7 @@ export default function SettingsPage() {
   const [mfaCode, setMfaCode] = useState('')
   const [mfaPassword, setMfaPassword] = useState('')
   const [mfaLoading, setMfaLoading] = useState(false)
+  const [whitelistInput, setWhitelistInput] = useState('')
 
   useEffect(() => {
     fetchSettings()
@@ -193,9 +199,20 @@ export default function SettingsPage() {
     // Auto-save immediately
     saveToStorage(updated)
 
+    if (key === 'font_size') {
+      applyFontSize(value as 'small' | 'medium' | 'large')
+    }
+
+    if (key === 'reduced_motion') {
+      document.documentElement.style.setProperty('--animation-speed', value ? '0' : '1')
+    }
+
+    if (key === 'compact_layout') {
+      applyCompactLayout(!!value)
+    }
+
     if (key === 'difficulty_preference') {
-      const diffEmoji: Record<string, string> = { easy: '😊', medium: '😐', hard: '😤' }
-      setToastMessage(`${diffEmoji[value as string]} Difficulty: ${value}`)
+      setToastMessage(`Difficulty preference set to ${value}.`)
       setShowToast(true)
     }
   }
@@ -209,6 +226,99 @@ export default function SettingsPage() {
         console.error('Failed to reset:', err)
       }
     }
+  }
+
+  const resetDisplaySettings = () => {
+    updateSetting('font_size', 'medium')
+    updateSetting('reduced_motion', false)
+    updateSetting('compact_layout', false)
+    setToastMessage('Display settings reset to default view.')
+    setShowToast(true)
+  }
+
+  const normalizeDomain = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/$/, '')
+
+  const isValidTrustedDomain = (domain: string) => {
+    if (domain === 'localhost') return true
+    if (/^localhost:\d+$/.test(domain)) return true
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return true
+    return false
+  }
+
+  const addTrustedDomain = () => {
+    const domain = normalizeDomain(whitelistInput)
+
+    if (!domain) {
+      setToastMessage('Enter a domain before adding it.')
+      setShowToast(true)
+      return
+    }
+
+    if (!isValidTrustedDomain(domain)) {
+      setToastMessage('Use a valid domain (example.com) or localhost.')
+      setShowToast(true)
+      return
+    }
+
+    if (settings.ml_whitelist?.includes(domain)) {
+      setToastMessage(`${domain} is already in your trusted list.`)
+      setShowToast(true)
+      return
+    }
+
+    updateSetting('ml_whitelist', [...(settings.ml_whitelist || []), domain])
+    setWhitelistInput('')
+    setToastMessage(`Added ${domain} to trusted websites.`)
+    setShowToast(true)
+  }
+
+  const applyProtectionPreset = (preset: 'security-first' | 'balanced' | 'quiet') => {
+    if (preset === 'security-first') {
+      const updated = {
+        ...settings,
+        ml_sensitivity: 'strict' as const,
+        auto_analyze: true,
+        show_confidence: true,
+        notifications: true,
+      }
+      setSettings(updated)
+      saveToStorage(updated)
+      setToastMessage('Applied preset: Security First')
+      setShowToast(true)
+      return
+    }
+
+    if (preset === 'balanced') {
+      const updated = {
+        ...settings,
+        ml_sensitivity: 'balanced' as const,
+        auto_analyze: true,
+        show_confidence: true,
+        notifications: true,
+      }
+      setSettings(updated)
+      saveToStorage(updated)
+      setToastMessage('Applied preset: Balanced')
+      setShowToast(true)
+      return
+    }
+
+    const updated = {
+      ...settings,
+      ml_sensitivity: 'relaxed' as const,
+      auto_analyze: false,
+      show_confidence: false,
+      notifications: false,
+    }
+    setSettings(updated)
+    saveToStorage(updated)
+    setToastMessage('Applied preset: Quiet Mode')
+    setShowToast(true)
   }
 
   const exportData = () => {
@@ -285,6 +395,16 @@ export default function SettingsPage() {
                 </h3>
                 
                 <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">Display Reset</div>
+                      <div className="text-sm text-slate-400">Restore default size and motion settings</div>
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={resetDisplaySettings}>
+                      Reset View
+                    </Button>
+                  </div>
+
                   <div>
                     <label className="block text-slate-300 mb-3 font-medium">Font Size</label>
                     <div className="grid grid-cols-3 gap-3">
@@ -310,6 +430,22 @@ export default function SettingsPage() {
 
                   <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
                     <div>
+                      <div className="text-white font-medium">Compact Layout</div>
+                      <div className="text-sm text-slate-400">Reduce spacing for better screen fit</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!settings.compact_layout}
+                        onChange={(e) => updateSetting('compact_layout', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
                       <div className="text-white font-medium">Keyboard Shortcuts</div>
                       <div className="text-sm text-slate-400">Enable quick actions with the keyboard</div>
                     </div>
@@ -325,7 +461,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="text-xs text-slate-500">
-                    Dark theme is always on to keep focus and contrast high. Light mode has been removed.
+                    Dark theme is currently enabled to keep visual contrast and focus consistent.
                   </div>
                 </div>
               </CardContent>
@@ -534,13 +670,42 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="text-xl font-bold text-white mb-2">Smart Protection Settings</h3>
                   <p className="text-slate-300 text-sm leading-relaxed">
-                    Our detection system learns from thousands of real phishing attempts to protect you. 
-                    These settings let you choose how cautious you want the protection to be - 
-                    like adjusting your home security from "always alert" to "relaxed but safe."
+                    Tune how aggressively PhishGuard warns you, choose what details to show,
+                    and set trusted domains to reduce noise while keeping protection strong.
                   </p>
                 </div>
               </div>
             </div>
+
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-2">Quick Presets</h3>
+                <p className="text-sm text-slate-400 mb-4">Apply a ready-to-use setup in one click.</p>
+                <div className="grid md:grid-cols-3 gap-3">
+                  <button
+                    onClick={() => applyProtectionPreset('security-first')}
+                    className="p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-left hover:bg-red-500/20 transition"
+                  >
+                    <div className="text-white font-medium">Security First</div>
+                    <div className="text-xs text-slate-300 mt-1">Strict detection and full visibility.</div>
+                  </button>
+                  <button
+                    onClick={() => applyProtectionPreset('balanced')}
+                    className="p-3 rounded-lg border border-blue-500/30 bg-blue-500/10 text-left hover:bg-blue-500/20 transition"
+                  >
+                    <div className="text-white font-medium">Balanced</div>
+                    <div className="text-xs text-slate-300 mt-1">Recommended default for daily use.</div>
+                  </button>
+                  <button
+                    onClick={() => applyProtectionPreset('quiet')}
+                    className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-left hover:bg-emerald-500/20 transition"
+                  >
+                    <div className="text-white font-medium">Quiet Mode</div>
+                    <div className="text-xs text-slate-300 mt-1">Fewer alerts and fewer interruptions.</div>
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* How Sensitive Should Protection Be? */}
             <Card>
@@ -548,10 +713,10 @@ export default function SettingsPage() {
                 <div className="mb-4">
                   <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
                     <Shield className="w-5 h-5 text-purple-400" />
-                    How Careful Should We Be?
+                    Detection Sensitivity
                   </h3>
                   <p className="text-sm text-slate-400">
-                    Choose how cautious you want the system to be when checking suspicious content
+                    Choose how much evidence is required before a warning is shown.
                   </p>
                 </div>
                 
@@ -559,37 +724,37 @@ export default function SettingsPage() {
                   {[
                     { 
                       value: 'strict', 
-                      label: '🔴 Extra Careful', 
+                      label: 'Strict', 
                       emoji: '🚨',
-                      title: 'Block Anything Suspicious',
-                      desc: 'Best for beginners or high-risk situations',
-                      example: 'Will warn about anything that looks even slightly odd',
-                      threshold: 'Warns when 50% or more confident it\'s phishing'
+                      title: 'Strict',
+                      desc: 'Best if you prefer early warnings.',
+                      example: 'More alerts, including borderline cases.',
+                      threshold: 'Warn at 50% estimated phishing risk'
                     },
                     { 
                       value: 'balanced', 
-                      label: '⚖️ Balanced (Recommended)', 
+                      label: 'Balanced (Recommended)', 
                       emoji: '✅',
-                      title: 'Smart Middle Ground',
-                      desc: 'Perfect for most people',
-                      example: 'Catches phishing while allowing normal websites',
-                      threshold: 'Warns when 65% or more confident it\'s phishing'
+                      title: 'Balanced',
+                      desc: 'Best default for most users.',
+                      example: 'Good phishing coverage with fewer false alarms.',
+                      threshold: 'Warn at 65% estimated phishing risk'
                     },
                     { 
                       value: 'relaxed', 
-                      label: '🟢 Trust More', 
+                      label: 'Relaxed', 
                       emoji: '😊',
-                      title: 'Only Obvious Threats',
-                      desc: 'For experienced users who recognize phishing',
-                      example: 'Only warns about clear phishing attempts',
-                      threshold: 'Warns when 75% or more confident it\'s phishing'
+                      title: 'Relaxed',
+                      desc: 'Fewer warnings, only stronger signals.',
+                      example: 'Useful if you are comfortable reviewing alerts manually.',
+                      threshold: 'Warn at 75% estimated phishing risk'
                     }
                   ].map(level => (
                     <button
                       key={level.value}
                       onClick={() => {
                         updateSetting('ml_sensitivity', level.value as "strict" | "balanced" | "relaxed")
-                        setToastMessage(`${level.emoji} Protection level: ${level.title}`)
+                        setToastMessage(`Detection mode set to ${level.title}.`)
                         setShowToast(true)
                       }}
                       className={`w-full p-4 rounded-lg border-2 transition text-left ${
@@ -609,7 +774,7 @@ export default function SettingsPage() {
                           </div>
                           <div className="text-xs text-slate-400 mb-2">{level.desc}</div>
                           <div className="text-xs text-slate-500 italic">Example: {level.example}</div>
-                          <div className="text-xs text-purple-400 mt-2">📊 {level.threshold}</div>
+                          <div className="text-xs text-purple-400 mt-2">{level.threshold}</div>
                         </div>
                       </div>
                     </button>
@@ -618,11 +783,11 @@ export default function SettingsPage() {
 
                 {/* What does this mean? */}
                 <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                  <div className="text-sm text-blue-300 font-medium mb-1">💡 What's the difference?</div>
+                  <div className="text-sm text-blue-300 font-medium mb-1">How to choose quickly</div>
                   <div className="text-xs text-slate-400 leading-relaxed">
-                    Think of it like a smoke detector: <strong className="text-white">Extra Careful</strong> is like a sensitive detector that beeps at burnt toast. 
-                    <strong className="text-white"> Balanced</strong> catches real fires but ignores cooking smoke. 
-                    <strong className="text-white"> Trust More</strong> only alerts for serious fires. Most people should use Balanced!
+                    Use <strong className="text-white">Strict</strong> if missing a phish is unacceptable,
+                    <strong className="text-white"> Balanced</strong> for everyday browsing,
+                    and <strong className="text-white"> Relaxed</strong> when you want fewer interruptions.
                   </div>
                 </div>
               </CardContent>
@@ -639,12 +804,30 @@ export default function SettingsPage() {
                 <div className="space-y-3">
                   <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
                     <div className="flex-1 pr-4">
-                      <div className="text-white font-medium mb-1">⚡ Auto-Analyze URLs</div>
+                      <div className="text-white font-medium mb-1">Default Analyze Tab</div>
                       <div className="text-sm text-slate-400">
-                        Check URLs automatically as you type them in. No need to click "Analyze" button.
+                        Choose which tab opens first on the Analyze page.
+                      </div>
+                    </div>
+                    <select
+                      value={settings.default_analyze_tab || 'screenshot'}
+                      onChange={(e) => updateSetting('default_analyze_tab', e.target.value as 'screenshot' | 'email' | 'url')}
+                      className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
+                    >
+                      <option value="screenshot">Screenshot</option>
+                      <option value="email">Email</option>
+                      <option value="url">URL</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div className="flex-1 pr-4">
+                      <div className="text-white font-medium mb-1">Auto-Analyze URLs</div>
+                      <div className="text-sm text-slate-400">
+                        Start URL checks automatically while you type.
                       </div>
                       <div className="text-xs text-slate-500 mt-2 italic">
-                        Saves time! But uses more resources.
+                        Faster workflow, slightly higher resource use.
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -660,12 +843,12 @@ export default function SettingsPage() {
 
                   <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
                     <div className="flex-1 pr-4">
-                      <div className="text-white font-medium mb-1">📊 Show Confidence Scores</div>
+                      <div className="text-white font-medium mb-1">Show Confidence Scores</div>
                       <div className="text-sm text-slate-400">
-                        Display how confident the system is about its decision (e.g., "85% sure this is phishing").
+                        Display model certainty for each result.
                       </div>
                       <div className="text-xs text-slate-500 mt-2 italic">
-                        Helpful for learning! But can be technical.
+                        Helpful for advanced users and debugging.
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -688,16 +871,16 @@ export default function SettingsPage() {
                 <div className="mb-4">
                   <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
                     <Shield className="w-5 h-5 text-green-400" />
-                    My Trusted Websites
+                    Trusted Websites
                   </h3>
                   <p className="text-sm text-slate-400">
-                    Add websites you use regularly so they're never flagged as suspicious
+                    Domains on this list skip phishing warnings.
                   </p>
                 </div>
 
                 {/* Why use this */}
                 <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <div className="text-sm text-green-300 font-medium mb-1">✅ When to add websites:</div>
+                  <div className="text-sm text-green-300 font-medium mb-1">Good candidates for this list</div>
                   <ul className="text-xs text-slate-400 space-y-1 ml-4 list-disc">
                     <li>Your work or school websites</li>
                     <li>Development/testing sites (like localhost)</li>
@@ -717,7 +900,7 @@ export default function SettingsPage() {
                         onClick={() => {
                           const newWhitelist = settings.ml_whitelist?.filter((_, i) => i !== index)
                           updateSetting('ml_whitelist', newWhitelist)
-                          setToastMessage(`🗑️ Removed ${domain} from trusted list`)
+                          setToastMessage(`Removed ${domain} from trusted websites.`)
                           setShowToast(true)
                         }}
                         className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-sm transition px-3 py-1 rounded hover:bg-red-500/10"
@@ -732,43 +915,25 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     placeholder="example.com (without https://)"
-                    id="whitelist-input"
+                    value={whitelistInput}
+                    onChange={(e) => setWhitelistInput(e.target.value)}
                     className="flex-1 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-sm"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        const input = e.currentTarget
-                        const domain = input.value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '')
-                        if (domain && !settings.ml_whitelist?.includes(domain)) {
-                          updateSetting('ml_whitelist', [...(settings.ml_whitelist || []), domain])
-                          input.value = ''
-                          setToastMessage(`✅ Added ${domain} to trusted list`)
-                          setShowToast(true)
-                        } else if (settings.ml_whitelist?.includes(domain)) {
-                          setToastMessage(`⚠️ ${domain} is already trusted`)
-                          setShowToast(true)
-                        }
+                        addTrustedDomain()
                       }
                     }}
                   />
                   <Button 
                     variant="primary"
-                    onClick={() => {
-                      const input = document.getElementById('whitelist-input') as HTMLInputElement
-                      const domain = input.value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '')
-                      if (domain && !settings.ml_whitelist?.includes(domain)) {
-                        updateSetting('ml_whitelist', [...(settings.ml_whitelist || []), domain])
-                        input.value = ''
-                        setToastMessage(`✅ Added ${domain} to trusted list`)
-                        setShowToast(true)
-                      }
-                    }}
+                    onClick={addTrustedDomain}
                   >
                     Add
                   </Button>
                 </div>
 
                 <div className="text-xs text-slate-500 mt-2 italic">
-                  💡 Tip: Just enter the domain name, like "github.com" or "localhost"
+                  Enter only the domain, for example: github.com or localhost:5173
                 </div>
               </CardContent>
             </Card>
@@ -779,10 +944,10 @@ export default function SettingsPage() {
                 <div className="mb-4">
                   <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
                     <Brain className="w-5 h-5 text-blue-400" />
-                    How Good Is This Protection?
+                    Model Performance
                   </h3>
                   <p className="text-sm text-slate-400">
-                    Our system was trained by analyzing thousands of real phishing attempts
+                    Snapshot of training and evaluation metrics.
                   </p>
                 </div>
 
@@ -807,7 +972,7 @@ export default function SettingsPage() {
 
                 {/* What we look for */}
                 <div className="mt-4 p-4 bg-slate-800/30 rounded-lg">
-                  <div className="text-sm font-medium text-white mb-3">🔍 What We Check:</div>
+                  <div className="text-sm font-medium text-white mb-3">What We Check</div>
                   <div className="grid md:grid-cols-2 gap-3 text-xs text-slate-400">
                     <div className="flex items-start gap-2">
                       <div className="text-purple-400">✓</div>
@@ -842,10 +1007,10 @@ export default function SettingsPage() {
 
                 {/* Plain language explanation */}
                 <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                  <div className="text-sm text-blue-300 font-medium mb-1">💬 In Simple Terms:</div>
+                  <div className="text-sm text-blue-300 font-medium mb-1">Plain-language summary</div>
                   <div className="text-xs text-slate-400 leading-relaxed">
-                    Think of our system like a security guard who's seen 1,775 different burglars. Now when someone suspicious shows up, 
-                    the guard recognizes the patterns - wrong ID, sketchy behavior, fake credentials. That's how we catch phishing!
+                    The system compares each sample against patterns found in known phishing campaigns.
+                    It scores risk from multiple signals, then combines them into a final decision.
                   </div>
                 </div>
               </CardContent>
