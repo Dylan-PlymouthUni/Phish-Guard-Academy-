@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "strict": true,
     "moduleResolution": "Bundler",
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": { "@/*": ["src/*"] },
     "types": ["vite/client"],
@@ -18,3 +19,4 @@
   },
   "include": ["src"]
 }
+

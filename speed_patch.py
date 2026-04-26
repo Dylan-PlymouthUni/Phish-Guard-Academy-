@@ -2,11 +2,20 @@
 """
 Speed optimization patch for advanced_url_features.py
 Disables slow WHOIS lookups and reduces HTTP timeouts
+This script applies targeted patches to the advanced_url_features.py module to significantly reduce the time taken for feature extraction during model training.
+The patches include:
+1. Disabling WHOIS lookups entirely, which can take 5-10 seconds per URL, by returning default values for WHOIS features.
+2. Reducing the HTTP timeout from 5 seconds to 1 second to speed up network requests.
+3. Adding early returns to skip page content scraping and redirect analysis, which are also time-consuming operations.
+4. Reducing SSL timeouts to speed up SSL checks.
+The script creates a backup of the original advanced_url_features.py file before applying the patches, allowing for easy restoration if needed. 
+After running this patch, the feature extraction process should be significantly faster, enabling the training pipeline to complete in a reasonable time frame even on
 """
 import re
 import shutil
 
 def main():
+    """Run the main CLI workflow for this module."""
     feature_file = "ml/advanced_url_features.py"
     backup_file = f"{feature_file}.backup"
     
@@ -33,6 +42,7 @@ def main():
     whois_pattern = r'(def _whois_features\(self, netloc: str\) -> Dict:.*?)(if not ADVANCED_LIBS_AVAILABLE:.*?)(try:.*?except Exception as e:.*?return features)'
     
     def whois_replacer(match):
+        """Run whois replacer."""
         header = match.group(1)
         return header + '''
         # DISABLED FOR SPEED - WHOIS lookups can take 5-10 seconds each

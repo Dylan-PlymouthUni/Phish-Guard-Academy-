@@ -1,3 +1,15 @@
+/**
+ * AchievementBadge component/module file.
+ * This file defines the AchievementBadge component which is used to display user achievements in the PhishGuard Academy application. The badge visually indicates whether an achievement is unlocked or locked, and can optionally show progress towards unlocking it.
+ * It includes the following responsibilities:
+ * - Displaying an icon, title, and description for the achievement.
+ * - Indicating whether the achievement is unlocked or locked with different styles.
+ * - Optionally showing a progress bar if a progress value is provided.
+ * - Using the Lock icon to indicate locked achievements.
+ * - Using a gradient background for unlocked achievements to make them visually appealing.
+ * - Ensuring the component is reusable and can be easily integrated into different parts of the application where achievements are displayed.
+ */
+
 import React from 'react';
 import { Lock } from 'lucide-react';
 

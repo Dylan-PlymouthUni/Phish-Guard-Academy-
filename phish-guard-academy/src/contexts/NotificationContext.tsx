@@ -1,4 +1,9 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+/**
+ * NotificationContext component/module file.
+  * This file defines the NotificationContext, which provides a way to show temporary notification messages (such as success, error, info, and warning) in the PhishGuard Academy application.
+ */
+
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react'
 
@@ -28,7 +33,7 @@ export function useNotifications() {
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
 
-  const showNotification = useCallback((type: Notification['type'], message: string, duration = 5000) => {
+    const showNotification = useCallback((type: Notification['type'], message: string, duration = 5000) => {
     const id = Math.random().toString(36).substring(2, 9)
     const notification: Notification = { id, type, message, duration }
     
@@ -41,27 +46,43 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const success = useCallback((message: string, duration?: number) => {
+    const success = useCallback((message: string, duration?: number) => {
     showNotification('success', message, duration)
   }, [showNotification])
 
-  const error = useCallback((message: string, duration?: number) => {
+    const error = useCallback((message: string, duration?: number) => {
     showNotification('error', message, duration)
   }, [showNotification])
 
-  const info = useCallback((message: string, duration?: number) => {
+    const info = useCallback((message: string, duration?: number) => {
     showNotification('info', message, duration)
   }, [showNotification])
 
-  const warning = useCallback((message: string, duration?: number) => {
+    const warning = useCallback((message: string, duration?: number) => {
     showNotification('warning', message, duration)
   }, [showNotification])
 
-  const removeNotification = (id: string) => {
+    const removeNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id))
   }
 
-  const getIcon = (type: Notification['type']) => {
+  useEffect(() => {
+        const handler = (event: Event) => {
+      const payload = (event as CustomEvent).detail as {
+        type?: Notification['type']
+        message?: string
+        duration?: number
+      }
+
+      if (!payload?.message) return
+      showNotification(payload.type || 'info', payload.message, payload.duration || 5000)
+    }
+
+    window.addEventListener('phishguard:notify', handler)
+    return () => window.removeEventListener('phishguard:notify', handler)
+  }, [showNotification])
+
+    const getIcon = (type: Notification['type']) => {
     switch (type) {
       case 'success': return <CheckCircle className="w-5 h-5" />
       case 'error': return <AlertCircle className="w-5 h-5" />
@@ -70,7 +91,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const getColors = (type: Notification['type']) => {
+    const getColors = (type: Notification['type']) => {
     switch (type) {
       case 'success': return 'bg-green-500/20 border-green-500/50 text-green-400'
       case 'error': return 'bg-red-500/20 border-red-500/50 text-red-400'

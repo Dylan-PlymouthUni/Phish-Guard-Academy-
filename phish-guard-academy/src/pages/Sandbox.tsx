@@ -1,3 +1,10 @@
+/**
+ * Sandbox component/module file.
+ * This file defines the Sandbox page, which allows users to practice identifying phishing emails in a safe environment. 
+ * It provides a collection of realistic email examples with varying difficulty levels, and users can analyze each email to determine if it's legitimate or a phishing attempt. 
+ * The page includes features such as scoring, hints, and detailed explanations to help users improve their phishing detection skills.
+ */
+
 import { useState } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
 import { Card, CardContent } from '../components/ui/Card'
@@ -253,7 +260,7 @@ export default function Sandbox() {
   const [showHints, setShowHints] = useState(false)
   const [hoveredLink, setHoveredLink] = useState<string | null>(null)
 
-  const handleGuess = (isPhishing: boolean) => {
+    const handleGuess = (isPhishing: boolean) => {
     if (!selectedEmail || revealed) return
     
     setUserGuess(isPhishing)
@@ -266,8 +273,8 @@ export default function Sandbox() {
     }))
   }
 
-  const nextEmail = () => {
-    const currentIndex = EMAIL_EXAMPLES.findIndex(e => e.id === selectedEmail?.id)
+    const nextEmail = () => {
+        const currentIndex = EMAIL_EXAMPLES.findIndex(e => e.id === selectedEmail?.id)
     const nextIndex = (currentIndex + 1) % EMAIL_EXAMPLES.length
     setSelectedEmail(EMAIL_EXAMPLES[nextIndex])
     setRevealed(false)
@@ -276,7 +283,7 @@ export default function Sandbox() {
     setHoveredLink(null)
   }
 
-  const selectEmail = (email: EmailExample) => {
+    const selectEmail = (email: EmailExample) => {
     setSelectedEmail(email)
     setRevealed(false)
     setUserGuess(null)

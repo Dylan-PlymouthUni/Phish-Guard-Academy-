@@ -1,3 +1,8 @@
+/**
+ * AchievementContext component/module file.
+  * This file defines the AchievementContext, which provides a way to trigger and display achievement notifications in the PhishGuard Academy application.
+ */
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import confetti from 'canvas-confetti'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -26,7 +31,7 @@ export function useAchievements() {
 export function AchievementProvider({ children }: { children: ReactNode }) {
   const [currentAchievement, setCurrentAchievement] = useState<Achievement | null>(null)
 
-  const triggerAchievement = (achievement: Achievement) => {
+    const triggerAchievement = (achievement: Achievement) => {
     setCurrentAchievement(achievement)
     
     // Trigger confetti
@@ -34,7 +39,7 @@ export function AchievementProvider({ children }: { children: ReactNode }) {
     const animationEnd = Date.now() + duration
     const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 10000 }
 
-    function randomInRange(min: number, max: number) {
+        function randomInRange(min: number, max: number) {
       return Math.random() * (max - min) + min
     }
 

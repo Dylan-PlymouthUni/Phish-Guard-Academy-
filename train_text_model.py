@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-⚠️  LEGACY/EXPERIMENTAL — not used for dissertation results.
+ LEGACY/EXPERIMENTAL — not used for dissertation results.
 Use scripts/run_experiment.py for reproducible dissertation results.
 
 Train Text/Email Phishing Detection Model
 Fine-tunes BERT on phishing email dataset
+This script trains a BERT-based text classifier to distinguish between phishing and legitimate emails.
+ It uses the Hugging Face Transformers library to fine-tune a pre-trained DistilBERT model on a small dataset of sample phishing and legitimate email texts.
+  The script includes functionality to create a training dataset, split it into training and validation sets, and train the model with configurable parameters such as the number of epochs and batch size. 
+  The trained model is saved to disk for later use in predictions and ensemble integration. 
+  The script also provides logging and user prompts to guide the training process, especially when the dataset is small, encouraging the user to collect more data for better performance
 """
 import sys
 from pathlib import Path
@@ -27,6 +32,7 @@ class TextModelTrainer:
     """Train BERT model on phishing emails"""
     
     def __init__(self, dataset_path: Path, use_bert: bool = True):
+        """Initialize class state and store required dependencies."""
         self.dataset_path = dataset_path
         self.use_bert = use_bert
         self.classifier = TextPhishingClassifier(use_gpu=True)

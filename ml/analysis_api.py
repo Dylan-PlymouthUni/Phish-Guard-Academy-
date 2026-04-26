@@ -1,11 +1,16 @@
 """
 Analysis endpoints that integrate with persistence layer
+This module defines the API endpoints for analyzing potential phishing threats based on user input, which can include text, URLs, and images. The main endpoint (/analyze) accepts various combinations of inputs and processes them using a machine learning ensemble model to generate a risk score and detailed findings. 
+If the ML ensemble is unavailable or fails, it falls back to a heuristic-based analysis that incorporates threat intelligence checks.
+ The results are normalized into a consistent format for frontend consumption.
 """
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 import json
 import logging
+import time
+import uuid
 from urllib.parse import urlparse
 
 from ml.auth_api import get_current_user
@@ -65,7 +70,20 @@ def _normalize_risk_label(risk: int) -> str:
 
 
 def _normalize_risk_summary(risk: int) -> str:
+    """Return a short human summary string for the numeric risk score."""
     return risk_summary_from_score(risk)
+
+
+def _error_detail(code: str, message: str, hint: str, request_id: str) -> dict:
+    """Build a stable error payload shape for analyze responses."""
+    return {
+        "error": {
+            "code": code,
+            "message": message,
+            "hint": hint,
+        },
+        "request_id": request_id,
+    }
 
 
 def _screenshot_result_unreliable(result: "PredictionResult") -> bool:
@@ -99,6 +117,10 @@ async def analyze_with_persistence(
     """
     Analyze phishing threats - no auth required for basic analysis
     """
+    request_id = uuid.uuid4().hex[:12]
+    started = time.perf_counter()
+    timings_ms = {}
+
     try:
         actor = _identify_actor(request)
         analysis_mode = "unknown"
@@ -107,17 +129,30 @@ async def analyze_with_persistence(
         image_bytes = None
 
         if image is not None:
+            t0 = time.perf_counter()
             image_bytes = await image.read()
+            timings_ms["image_read"] = round((time.perf_counter() - t0) * 1000.0, 2)
 
         if not text and not url and image is None:
             try:
+                t0 = time.perf_counter()
                 body = await request.json()
+                timings_ms["json_parse"] = round((time.perf_counter() - t0) * 1000.0, 2)
                 if isinstance(body, dict):
                     text = str(body.get("text") or "")
                     url = str(body.get("url") or "")
             except Exception:
                 # Not a JSON request body; continue using form values.
                 pass
+
+        logger.info(
+            "[ANALYZE_START] request_id=%s actor=%s text=%s url=%s image=%s",
+            request_id,
+            actor,
+            bool(text),
+            bool(url),
+            image is not None,
+        )
 
         # Try ML ensemble first
         try:
@@ -128,24 +163,38 @@ async def analyze_with_persistence(
                 # Load image
                 import io
                 from PIL import Image
+                t0 = time.perf_counter()
                 pil_image = Image.open(io.BytesIO(image_bytes))
+                timings_ms["image_decode"] = round((time.perf_counter() - t0) * 1000.0, 2)
+                t0 = time.perf_counter()
                 result = ensemble.analyze_full_context(url=url, text=text, image=pil_image)
+                timings_ms["analyze_full_context"] = round((time.perf_counter() - t0) * 1000.0, 2)
                 analysis_mode = "full"
             elif url and text:
+                t0 = time.perf_counter()
                 result = ensemble.analyze_text(text=text, url=url)
+                timings_ms["analyze_text_with_url"] = round((time.perf_counter() - t0) * 1000.0, 2)
                 analysis_mode = "url+text"
             elif url:
+                t0 = time.perf_counter()
                 result = ensemble.analyze_url(url=url)
+                timings_ms["analyze_url"] = round((time.perf_counter() - t0) * 1000.0, 2)
                 analysis_mode = "url"
             elif text:
+                t0 = time.perf_counter()
                 result = ensemble.analyze_text(text=text)
+                timings_ms["analyze_text"] = round((time.perf_counter() - t0) * 1000.0, 2)
                 analysis_mode = "text"
             elif image:
                 # Load image
                 import io
                 from PIL import Image
+                t0 = time.perf_counter()
                 pil_image = Image.open(io.BytesIO(image_bytes))
+                timings_ms["image_decode"] = round((time.perf_counter() - t0) * 1000.0, 2)
+                t0 = time.perf_counter()
                 result = ensemble.analyze_screenshot(image=pil_image)
+                timings_ms["analyze_screenshot"] = round((time.perf_counter() - t0) * 1000.0, 2)
                 analysis_mode = "screenshot"
 
                 # If visual stack is unavailable (e.g. OpenCV missing),
@@ -161,7 +210,15 @@ async def analyze_with_persistence(
                         "boxes": screenshot_fallback.get("boxes", [])
                     }
             else:
-                raise HTTPException(status_code=400, detail="No input provided")
+                raise HTTPException(
+                    status_code=400,
+                    detail=_error_detail(
+                        "NO_INPUT",
+                        "No input provided.",
+                        "Provide at least one of: text, url, or image.",
+                        request_id,
+                    ),
+                )
             
             # Format findings for frontend
             formatted_findings = []
@@ -327,6 +384,7 @@ async def analyze_with_persistence(
             }
     
         if response_payload:
+            response_payload["request_id"] = request_id
             behavior_analyzer.log_activity(actor, "analysis", {
                 "mode": analysis_mode,
                 "risk": response_payload.get("risk"),
@@ -376,11 +434,42 @@ async def analyze_with_persistence(
                         finally:
                             db.close()
 
+            total_ms = round((time.perf_counter() - started) * 1000.0, 2)
+            logger.info(
+                "[ANALYZE_DONE] request_id=%s mode=%s fallback=%s total_ms=%s timings_ms=%s risk=%s",
+                request_id,
+                analysis_mode,
+                fallback_used,
+                total_ms,
+                timings_ms,
+                response_payload.get("risk"),
+            )
             return response_payload
 
+    except HTTPException as http_exc:
+        if isinstance(http_exc.detail, dict) and "error" in http_exc.detail:
+            raise http_exc
+
+        raise HTTPException(
+            status_code=http_exc.status_code,
+            detail=_error_detail(
+                "ANALYSIS_HTTP_ERROR",
+                str(http_exc.detail),
+                "Check request payload and retry.",
+                request_id,
+            ),
+        ) from http_exc
     except Exception as e:
-        logger.error(f"Analysis error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Analysis error request_id=%s: %s", request_id, e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=_error_detail(
+                "ANALYSIS_ERROR",
+                "Internal analysis error.",
+                "Retry later or submit a smaller input.",
+                request_id,
+            ),
+        ) from e
 
 
 @router.get("/analyses")
@@ -492,6 +581,7 @@ async def get_risk_distribution(
     user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Return low/medium/high bucket counts for the user's recent analyses."""
     repos = get_repositories(db)
     analyses = repos["analyses"].get_by_user(user.id, limit=1000)
     if not analyses:
@@ -509,6 +599,7 @@ async def get_daily_analytics(
     user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Aggregate analysis volume and high-risk counts per day for charting."""
     repos = get_repositories(db)
     analyses = repos["analyses"].get_by_user(user.id, limit=1000)
     if not analyses:

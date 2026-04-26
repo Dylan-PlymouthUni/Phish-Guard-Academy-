@@ -17,6 +17,7 @@ from ml.api_screenshot_fix import analyze_screenshot_content
 
 
 def load_samples(base: Path) -> List[Tuple[str, int, int]]:
+    """Load samples."""
     rows: List[Tuple[str, int, int]] = []
     for label_name, y in [("legitimate", 0), ("phishing", 1)]:
         for p in (base / label_name).rglob("*"):
@@ -28,6 +29,7 @@ def load_samples(base: Path) -> List[Tuple[str, int, int]]:
 
 
 def metrics(rows: List[Tuple[str, int, int]], threshold: int):
+    """Run metrics."""
     tp = fp = tn = fn = 0
     for _, y, r in rows:
         pred = 1 if r >= threshold else 0
@@ -48,6 +50,7 @@ def metrics(rows: List[Tuple[str, int, int]], threshold: int):
 
 
 def pick_best_threshold(rows: List[Tuple[str, int, int]], candidates: List[int]) -> Tuple[int, Dict[str, float]]:
+    """Pick best threshold."""
     best_threshold = candidates[0]
     best_stats = None
     for t in candidates:
@@ -75,6 +78,7 @@ def stratified_holdout(
     holdout_ratio: float,
     seed: int,
 ) -> Tuple[List[Tuple[str, int, int]], List[Tuple[str, int, int]]]:
+    """Run stratified holdout."""
     legit = [r for r in rows if r[1] == 0]
     phish = [r for r in rows if r[1] == 1]
 
@@ -91,6 +95,7 @@ def stratified_holdout(
 
 
 def main():
+    """Run the main CLI workflow for this module."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--threshold", type=int, default=None, help="Fixed threshold to evaluate")
     parser.add_argument("--min-f1", type=float, default=None, help="Fail if holdout F1 is below this")

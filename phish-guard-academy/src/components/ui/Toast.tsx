@@ -1,3 +1,8 @@
+/**
+ * Toast component/module file.
+  * This file defines the Toast component, which is a reusable UI component for displaying temporary notification messages in the PhishGuard Academy application.
+ */
+
 import { useEffect, useState } from 'react'
 import { CheckCircle, XCircle, AlertCircle, Info } from 'lucide-react'
 
@@ -12,7 +17,7 @@ export function Toast({ message, type = 'info', duration = 3000, onClose }: Toas
   const [isVisible, setIsVisible] = useState(true)
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+        const timer = setTimeout(() => {
       setIsVisible(false)
       setTimeout(onClose, 300) // Allow fade out animation
     }, duration)

@@ -1,3 +1,8 @@
+/**
+ * Card component/module file.
+ * Added beginner-friendly comments so each section is easier to revisit later.
+ */
+
 import React from 'react';
 
 interface CardProps {
@@ -9,7 +14,7 @@ interface CardProps {
 }
 
 export function Card({ className = '', children, hover = false, onClick, badge }: CardProps) {
-  const handleClick = (e: React.MouseEvent) => {
+    const handleClick = (e: React.MouseEvent) => {
     console.log('🔥 CARD CLICKED!', { onClick: typeof onClick, hover })
     alert('Card was clicked! onClick type: ' + typeof onClick)
     if (onClick) {

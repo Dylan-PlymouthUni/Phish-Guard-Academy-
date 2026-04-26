@@ -1,3 +1,8 @@
+/**
+ * Alert component/module file.
+  * This file defines the Alert component, which is a reusable UI component for displaying different types of alert messages (info, success, warning, error) in the PhishGuard Academy application.
+ */
+
 import React from 'react'
 import { AlertCircle, CheckCircle, Info, AlertTriangle } from 'lucide-react'
 

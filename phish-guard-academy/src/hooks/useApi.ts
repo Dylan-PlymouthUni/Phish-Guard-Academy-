@@ -1,3 +1,11 @@
+/**
+ * React hook helpers for calling backend API endpoints.
+ * This file defines the useApi hook for fetching data from a given URL and managing loading and error states, as well as helper functions apiPost and apiGet for making POST and GET requests to the backend API. These utilities are used throughout the PhishGuard Academy application to interact with the backend services.
+ * - useApi: A custom React hook that takes a URL and optional options, and returns the fetched data, loading state, and error state.
+ * - apiPost: A helper function for making POST requests to the backend API, which takes a URL and a request body, and returns the response data.
+ * - apiGet: A helper function for making GET requests to the backend API, which takes a URL and returns the response data.
+ */
+
 import { useState, useEffect } from 'react'
 
 interface UseApiOptions {
@@ -12,7 +20,7 @@ export function useApi<T>(url: string, options?: UseApiOptions) {
   useEffect(() => {
     if (options?.skip) return
 
-    const fetchData = async () => {
+        const fetchData = async () => {
       try {
         setLoading(true)
         setError(null)

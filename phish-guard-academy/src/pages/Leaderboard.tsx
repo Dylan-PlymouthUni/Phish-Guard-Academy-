@@ -1,3 +1,8 @@
+/**
+ * Leaderboard component/module file.
+  * This file defines the Leaderboard page, which displays a ranked list of users based on their points, levels, streaks, and other statistics in the PhishGuard Academy application.
+ */
+
 import { Trophy, Medal, Star, TrendingUp, Award, Flame, Target } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
@@ -31,8 +36,8 @@ export default function Leaderboard() {
 
   // Refresh data when component becomes visible or receives focus
   useEffect(() => {
-    const onVis = () => { if (!document.hidden) loadLeaderboard() }
-    const onFocus = () => loadLeaderboard()
+        const onVis = () => { if (!document.hidden) loadLeaderboard() }
+        const onFocus = () => loadLeaderboard()
     
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', onFocus)
@@ -43,7 +48,7 @@ export default function Leaderboard() {
     }
   }, [])
 
-  const loadLeaderboard = async () => {
+    const loadLeaderboard = async () => {
     try {
       if (!token) {
         setLeaderboard([])
@@ -57,7 +62,7 @@ export default function Leaderboard() {
       })
       if (!res.ok) throw new Error('Failed to load leaderboard')
       const data = await res.json()
-      const entries: LeaderboardEntry[] = (data.leaderboard || []).map((e: any) => ({
+            const entries: LeaderboardEntry[] = (data.leaderboard || []).map((e: any) => ({
         rank: e.rank,
         user_id: e.user_id,
         name: e.name,
@@ -77,7 +82,7 @@ export default function Leaderboard() {
       }
 
       // current user: either part of top, or provided separately
-      const me = entries.find(en => user && en.user_id === user.user_id) || (data.current_user ? {
+            const me = entries.find(en => user && en.user_id === user.user_id) || (data.current_user ? {
         rank: data.current_user.rank,
         user_id: data.current_user.user_id,
         name: data.current_user.name,
@@ -94,14 +99,14 @@ export default function Leaderboard() {
     }
   }
 
-  const getRankColor = (rank: number) => {
+    const getRankColor = (rank: number) => {
     if (rank === 1) return 'from-yellow-500 to-yellow-600'
     if (rank === 2) return 'from-gray-300 to-gray-400'
     if (rank === 3) return 'from-orange-600 to-orange-700'
     return 'from-blue-500 to-purple-500'
   }
 
-  const getRankIcon = (rank: number) => {
+    const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="w-6 h-6 text-yellow-400" />
     if (rank === 2) return <Medal className="w-6 h-6 text-gray-400" />
     if (rank === 3) return <Medal className="w-6 h-6 text-orange-400" />

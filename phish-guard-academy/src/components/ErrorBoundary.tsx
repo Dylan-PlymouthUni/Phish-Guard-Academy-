@@ -1,3 +1,15 @@
+/**
+ * ErrorBoundary component/module file.
+ * This file defines the ErrorBoundary component, which is a React class component that catches JavaScript errors anywhere in its child component tree, logs those errors, and displays a fallback UI instead of the component tree that crashed. It also includes an ErrorFallback functional component for a lightweight error display option.
+ * The ErrorBoundary component has the following responsibilities:
+ * - Catching errors in the component tree using lifecycle methods.
+ * - Logging error details to the console for debugging purposes.
+ * - Displaying a user-friendly fallback UI when an error occurs.
+ * - Providing options for users to reset the error state, reload the page, or navigate back to the home page.
+ * The ErrorFallback component is a simpler alternative that can be used as a fallback UI, showing only the error message and a button to try again.
+ * Both components are designed to improve the user experience by gracefully handling unexpected errors and providing clear feedback and recovery options.
+ */
+
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
 import { Button } from './ui/Button'

@@ -1,3 +1,15 @@
+/**
+ * Analytics component/module file.
+  * This file defines the Analytics page component for the PhishGuard Academy application. The Analytics page provides users with insights into their phishing detection activity, including summary statistics, risk distribution, and trends over time.
+  * The component is responsible for:
+  * - Fetching analytics data from the backend API when the component mounts.
+  * - Displaying summary statistics such as total analyses, high/medium/safe counts, average risk percentage, challenges passed, and lessons completed.
+  * - Visualizing risk distribution with a simple bar chart representation.
+  * - Showing a trend of daily activity over the past 30 days with a bar chart.
+  * - Providing insights and recommendations based on the user's analytics data.
+  * - Ensuring a visually appealing and user-friendly interface with appropriate use of colors, typography, and spacing.
+ */
+
 import { BarChart3, TrendingUp, AlertCircle, CheckCircle, PieChart, Activity, Calendar } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -35,7 +47,7 @@ export default function Analytics() {
     fetchData()
   }, [])
 
-  const fetchData = async () => {
+    const fetchData = async () => {
     try {
       const [summaryRes, dailyRes, distRes] = await Promise.all([
         fetch('/api/analytics/summary'),
@@ -190,7 +202,7 @@ export default function Analytics() {
             <div className="overflow-x-auto">
               <div className="flex gap-2 pb-4" style={{ minWidth: '100%' }}>
                 {dailyStats.map((day, idx) => {
-                  const maxCount = Math.max(...dailyStats.map(d => d.analyses_count), 5)
+                                    const maxCount = Math.max(...dailyStats.map(d => d.analyses_count), 5)
                   const height = (day.analyses_count / maxCount) * 120
                   
                   return (

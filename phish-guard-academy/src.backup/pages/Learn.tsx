@@ -1,3 +1,16 @@
+/**
+ * Learn component/module file.
+ * This file defines the Learn page component for the PhishGuard Academy application. The Learn page provides users with a structured learning experience to master phishing detection skills. It includes a list of lessons, each with a title, description, difficulty level, duration, and points reward. Users can click on a lesson to view its content and mark it as complete to earn points.
+ * The Learn component is responsible for:
+ * - Fetching and displaying a list of lessons from the backend API.
+ * - Showing the user's progress, including total points, lessons completed, and achievements.
+ * - Allowing users to view lesson content and mark lessons as complete to earn points.
+ * - Providing a visually appealing and user-friendly interface with appropriate use of colors, typography, and spacing.
+ * - Encouraging users to engage with the learning material and track their progress effectively.
+ * - Ensuring a responsive design that works well on both desktop and mobile devices.
+ * - Using icons and visual indicators to enhance the user experience and make it easy to identify lesson difficulty and rewards.
+ */
+
 import { BookOpen, CheckCircle, Lock, Trophy, Zap } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -29,7 +42,7 @@ export default function Learn() {
     fetchData()
   }, [])
 
-  const fetchData = async () => {
+    const fetchData = async () => {
     try {
       const [lessonsRes, progressRes] = await Promise.all([
         fetch('/api/lessons'),
@@ -44,7 +57,7 @@ export default function Learn() {
     }
   }
 
-  const completeLesson = async (lessonId: string) => {
+    const completeLesson = async (lessonId: string) => {
     try {
       const res = await fetch(`/api/complete-lesson/${lessonId}`, { method: 'POST' })
       if (res.ok) {

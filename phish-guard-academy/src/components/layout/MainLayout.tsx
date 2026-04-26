@@ -1,3 +1,8 @@
+/**
+ * MainLayout component/module file.
+  * This file defines the MainLayout component which serves as the overall layout for the PhishGuard Academy application.
+ */
+
 import React from 'react'
 import Navigation from '../Navigation'
 import { Zap } from 'lucide-react'

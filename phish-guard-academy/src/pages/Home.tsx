@@ -1,3 +1,8 @@
+/**
+ * Home component/module file.
+  * This file defines the Home page, which serves as the landing page for the PhishGuard Academy application.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Shield, Zap, Users, TrendingUp, ArrowRight, CheckCircle2, AlertCircle, Mail, Globe, Image as ImageIcon, Target, Award, BookOpen, BarChart3, Eye, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -16,7 +21,7 @@ export default function Home() {
     const targets = { analyses: 12500, users: 8300, rate: 95.2 };
     let step = 0;
 
-    const timer = setInterval(() => {
+        const timer = setInterval(() => {
       step++;
       setAnimatedStats({
         analyses: Math.floor((targets.analyses * step) / steps),
@@ -32,7 +37,7 @@ export default function Home() {
 
   // Rotate phishing examples
   useEffect(() => {
-    const timer = setInterval(() => {
+        const timer = setInterval(() => {
       setActiveExample((prev) => (prev + 1) % phishingExamples.length);
     }, 5000);
     return () => clearInterval(timer);

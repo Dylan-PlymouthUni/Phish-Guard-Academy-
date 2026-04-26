@@ -1,5 +1,10 @@
 """
 Email-specific phishing analysis endpoints
+This module defines the API endpoints related to analyzing email content for phishing indicators.
+ It includes functionality to analyze the text of an email, extract and check links, and provide detailed findings and recommendations based on the analysis. 
+ The endpoints are protected with authentication and integrate with the behavior analysis system to log relevant user activities. 
+ The module also includes helper functions to identify common phishing patterns in email content, such as urgency language, suspicious links, credential requests, impersonation attempts, spoofed domains, and malicious attachment indicators. 
+ This allows users to receive comprehensive feedback on potential phishing threats in their emails and learn how to recognize them in the future.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -16,6 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/email", tags=["email-analysis"])
 
 class EmailAnalysisRequest(BaseModel):
+    """Schema for EmailAnalysisRequest data."""
     sender: Optional[str] = None
     subject: str
     body: str

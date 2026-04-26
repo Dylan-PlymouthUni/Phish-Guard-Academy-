@@ -1,6 +1,8 @@
-"""
-Ensemble ML Pipeline for Phishing Detection
-Combines URL, Text, and Visual models with confidence calibration
+"""Main ensemble decision layer for phishing detection.
+
+This module combines URL, text, screenshot, and heuristic signals into one
+risk score and includes fallback logic when individual components disagree.
+The PhishingEnsemble class provides methods to analyze URLs, text content, and screenshots, and it intelligently combines the results from multiple specialized classifiers to produce a final risk assessment.
 """
 from __future__ import annotations
 

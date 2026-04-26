@@ -1,3 +1,18 @@
+/**
+ * Challenges component/module file.
+  * This file defines the Challenges page component for the PhishGuard Academy application. The Challenges page allows users to test their phishing detection skills by participating in various challenges that simulate real-world phishing scenarios. Users can earn points and track their progress as they complete challenges of varying difficulty levels.
+  *   The component is responsible for:
+  * - Fetching the list of available challenges from the backend API when the component mounts.
+  * - Displaying a list of challenges with their titles, descriptions, difficulty levels, time limits, and point rewards.
+  * - Allowing users to start a challenge, which presents them with a series of questions related to phishing detection.
+  * - Handling user answers and providing feedback on their performance after submitting the challenge.
+  * - Updating the user's progress and points based on their performance in the challenge.
+  * - Ensuring a visually appealing and user-friendly interface with appropriate use of colors, typography, and spacing.
+  * - Providing a responsive design that works well on both desktop and mobile devices.
+  * - Offering insights and recommendations based on the user's performance in the challenges.
+  * - Allowing users to retry challenges to improve their scores and earn more points.
+ */
+
 import { Target, Clock, Trophy, CheckCircle, XCircle, BarChart3 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -40,11 +55,11 @@ export default function Challenges() {
 
   useEffect(() => {
     if (!started || !selectedChallenge || timeLeft <= 0) return
-    const timer = setInterval(() => setTimeLeft(t => t - 1), 1000)
+        const timer = setInterval(() => setTimeLeft(t => t - 1), 1000)
     return () => clearInterval(timer)
   }, [started, selectedChallenge, timeLeft])
 
-  const fetchChallenges = async () => {
+    const fetchChallenges = async () => {
     try {
       const res = await fetch('/api/challenges')
       if (res.ok) setChallenges(await res.json())
@@ -55,7 +70,7 @@ export default function Challenges() {
     }
   }
 
-  const startChallenge = (challenge: Challenge) => {
+    const startChallenge = (challenge: Challenge) => {
     setSelectedChallenge(challenge)
     setAnswers({})
     setSubmitted(false)
@@ -65,11 +80,11 @@ export default function Challenges() {
     setStarted(true)
   }
 
-  const handleAnswer = (questionId: string, answer: string) => {
+    const handleAnswer = (questionId: string, answer: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: answer }))
   }
 
-  const submitChallenge = async () => {
+    const submitChallenge = async () => {
     if (!selectedChallenge) return
     
     try {
@@ -94,7 +109,7 @@ export default function Challenges() {
     }
   }
 
-  const getDifficultyColor = (diff: string) => {
+    const getDifficultyColor = (diff: string) => {
     switch(diff) {
       case 'easy': return 'text-green-400 bg-green-500/10 border-green-500/20'
       case 'medium': return 'text-orange-400 bg-orange-500/10 border-orange-500/20'
@@ -103,7 +118,7 @@ export default function Challenges() {
     }
   }
 
-  const formatTime = (seconds: number) => {
+    const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, '0')}`

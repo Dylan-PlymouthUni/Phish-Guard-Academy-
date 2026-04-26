@@ -1,5 +1,10 @@
-import { Zap, AlertCircle, Eye, Send, CheckCircle } from 'lucide-react'
-import { useState } from 'react'
+/**
+ * Analyze component/module file.
+  * This file defines the Analyze page, which allows users to analyze text, URLs, or screenshots for potential phishing indicators using a machine learning model.
+ */
+
+import { Keyboard, Sparkles, Eye } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
@@ -8,10 +13,64 @@ import { Badge } from '../components/ui/Badge'
 import { Toast } from '../components/ui/Toast'
 import { AnalysisResult } from '../types'
 import { getSettings, recordAnalysis } from '../utils/storage'
+import { registerShortcut, unregisterShortcut } from '../utils/keyboardShortcuts'
+import { sendNotification } from '../utils/settingsEffects'
 import { useAuth } from '../contexts/AuthContext'
 
+type AnalyzeMacro = {
+  id: string
+  title: string
+  description: string
+  tab: 'email' | 'url'
+  text?: string
+  url?: string
+  hotkey: string
+  autoRun?: boolean
+}
+
+const ANALYZE_MACROS: AnalyzeMacro[] = [
+  {
+    id: 'credential-reset',
+    title: 'Credential Reset Scam',
+    description: 'Loads a fake password reset email and runs analysis immediately.',
+    tab: 'email',
+    hotkey: 'Alt+1',
+    autoRun: true,
+    text: 'Urgent: Your account will be suspended in 2 hours. Click here to confirm your password and verify your billing details immediately.'
+  },
+  {
+    id: 'invoice-fraud',
+    title: 'Invoice Fraud Email',
+    description: 'Loads a suspicious invoice lure with urgency and payment pressure.',
+    tab: 'email',
+    hotkey: 'Alt+2',
+    autoRun: true,
+    text: 'URGENT payroll failure: your salary transfer is on hold. Verify your employee portal password immediately within 24 hours to avoid account closure.'
+  },
+  {
+    id: 'spoofed-login-url',
+    title: 'Spoofed Login URL',
+    description: 'Runs a suspicious URL with phishing context for stronger detection demos.',
+    tab: 'url',
+    hotkey: 'Alt+3',
+    autoRun: true,
+    text: 'Urgent account alert: verify your Microsoft 365 password now to avoid mailbox suspension in 24 hours.',
+    url: 'http://198.51.100.23/office365/login/verify'
+  },
+  {
+    id: 'office-macro-lure',
+    title: 'Office Macro Lure',
+    description: 'Simulates phishing that asks users to click Enable Content/Enable Macros.',
+    tab: 'email',
+    hotkey: 'Alt+4',
+    autoRun: true,
+    text: 'Security warning: Microsoft Office has blocked macros. Click Enable Content and Enable Macros to view the secure invoice, then verify your Microsoft 365 password immediately within 24 hours to avoid account suspension.'
+  },
+]
+
 export default function Analyze() {
-  const initialTab = (getSettings().default_analyze_tab || 'screenshot') as 'screenshot' | 'email' | 'url'
+  const [preferences, setPreferences] = useState(() => getSettings())
+  const initialTab = (preferences.default_analyze_tab || 'screenshot') as 'screenshot' | 'email' | 'url'
   const [file, setFile] = useState<File | null>(null)
   const [url, setUrl] = useState('')
   const [text, setText] = useState('')
@@ -21,10 +80,79 @@ export default function Analyze() {
   const [error, setError] = useState<string | null>(null)
   const [showToast, setShowToast] = useState(false)
   const [screenshotForMarkup, setScreenshotForMarkup] = useState<string | null>(null)
+  const lastAutoAnalyzedUrl = useRef('')
   const { refreshUser, token } = useAuth()
-  const showConfidence = getSettings().show_confidence !== false
+  const showConfidence = preferences.show_confidence !== false
 
-  const analyzeScreenshot = async () => {
+  useEffect(() => {
+        const handleSettingsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent).detail
+      if (detail) {
+        setPreferences(detail)
+      } else {
+        setPreferences(getSettings())
+      }
+    }
+
+    window.addEventListener('phishguard:settings-updated', handleSettingsUpdated)
+    return () => window.removeEventListener('phishguard:settings-updated', handleSettingsUpdated)
+  }, [])
+
+    const isWhitelistedDomain = (candidateUrl: string) => {
+    try {
+      const parsed = new URL(candidateUrl.startsWith('http') ? candidateUrl : `https://${candidateUrl}`)
+      const hostname = parsed.hostname.toLowerCase()
+      return (preferences.ml_whitelist || []).some((domain) => hostname === domain || hostname.endsWith(`.${domain}`) || hostname === domain.split(':')[0])
+    } catch {
+      return false
+    }
+  }
+
+    const shouldNotifyThreat = (risk: number) => {
+    if (!preferences.threat_detection_alert) return false
+    const threshold = preferences.ml_sensitivity === 'strict' ? 50 : preferences.ml_sensitivity === 'relaxed' ? 75 : 65
+    return risk >= threshold
+  }
+
+    const runTextOrUrlAnalysis = useCallback(async (inputText: string, inputUrl: string) => {
+    const cleanText = inputText.trim()
+    const cleanUrl = inputUrl.trim()
+    if (!cleanText && !cleanUrl) return
+
+    setLoading(true)
+    setError(null)
+    try {
+      const formData = new FormData()
+      formData.append('text', cleanText)
+      formData.append('url', cleanUrl)
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        body: formData
+      })
+      if (res.ok) {
+        const analysisResult = await res.json()
+        setResult(analysisResult)
+        recordAnalysis({
+          risk: analysisResult.risk,
+          type: cleanUrl ? 'url' : 'text',
+          findings: analysisResult.findings?.length || 0
+        })
+        if (cleanUrl && shouldNotifyThreat(analysisResult.risk)) {
+          await sendNotification('PhishGuard URL warning', `${Math.round(analysisResult.risk)}% phishing risk detected for this URL.`)
+        }
+        await refreshUser()
+      } else {
+        setError('Analysis failed. Please check the input and try again.')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error analyzing')
+    } finally {
+      setLoading(false)
+    }
+  }, [token, refreshUser, preferences.ml_sensitivity, preferences.threat_detection_alert])
+
+    const analyzeScreenshot = async () => {
     if (!file) return
     setLoading(true)
     setError(null)
@@ -52,6 +180,9 @@ export default function Analyze() {
           type: 'screenshot',
           findings: analysisResult.findings?.length || 0
         })
+        if (shouldNotifyThreat(analysisResult.risk)) {
+          await sendNotification('PhishGuard threat detected', `Screenshot analysis returned ${analysisResult.risk}% risk.`)
+        }
         // Refresh user stats to get updated XP
         await refreshUser()
         // Show success notification
@@ -66,62 +197,41 @@ export default function Analyze() {
     }
   }
 
-  const analyzeText = async () => {
-    const cleanText = text.trim()
-    const cleanUrl = url.trim()
-    if (!cleanText && !cleanUrl) return
-    setLoading(true)
-    setError(null)
-    try {
-      const formData = new FormData()
-      formData.append('text', cleanText)
-      formData.append('url', cleanUrl)
-      const res = await fetch('/api/analyze', { 
-        method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        body: formData
-      })
-      if (res.ok) {
-        const analysisResult = await res.json()
-        setResult(analysisResult)
-        // Record the analysis
-        recordAnalysis({
-          risk: analysisResult.risk,
-          type: url ? 'url' : 'text',
-          findings: analysisResult.findings?.length || 0
-        })
-        // Refresh user stats to get updated XP
-        await refreshUser()
-      } else {
-        setError('Analysis failed. Please check the input and try again.')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error analyzing')
-    } finally {
-      setLoading(false)
-    }
+    const analyzeText = async () => {
+    await runTextOrUrlAnalysis(text, url)
   }
 
-  const getRiskColor = (percent: number) => {
+    const runMacro = useCallback(async (macro: AnalyzeMacro) => {
+    setResult(null)
+    setError(null)
+    setActiveTab(macro.tab)
+    setText(macro.text || '')
+    setUrl(macro.url || '')
+    if (macro.autoRun) {
+      await runTextOrUrlAnalysis(macro.text || '', macro.url || '')
+    }
+  }, [runTextOrUrlAnalysis])
+
+    const getRiskColor = (percent: number) => {
     if (percent >= 70) return 'text-red-500'
     if (percent >= 40) return 'text-orange-500'
     return 'text-green-500'
   }
 
-  const getRiskLabel = (percent: number) => {
+    const getRiskLabel = (percent: number) => {
     if (percent >= 70) return 'LIKELY PHISHING'
     if (percent >= 40) return 'NEEDS VERIFICATION'
     return 'LOW RISK'
   }
 
-  const getRiskLabelFromApi = (resultData: AnalysisResult) => {
+    const getRiskLabelFromApi = (resultData: AnalysisResult) => {
     if (resultData.risk_label === 'likely_phishing') return 'LIKELY PHISHING'
     if (resultData.risk_label === 'needs_verification') return 'NEEDS VERIFICATION'
     if (resultData.risk_label === 'likely_safe') return 'LOW RISK'
     return getRiskLabel(resultData.risk)
   }
 
-  const getRiskSummary = (percent: number) => {
+    const getRiskSummary = (percent: number) => {
     if (percent >= 70) {
       return 'Multiple high-risk signals were detected. Treat this as suspicious until verified through a trusted channel.'
     }
@@ -131,13 +241,13 @@ export default function Analyze() {
     return 'No strong phishing indicators were detected. Continue with normal caution for sensitive actions.'
   }
 
-  const getRiskBg = (percent: number) => {
+    const getRiskBg = (percent: number) => {
     if (percent >= 70) return 'bg-red-500/10 border-red-500/30'
     if (percent >= 40) return 'bg-orange-500/10 border-orange-500/30'
     return 'bg-green-500/10 border-green-500/30'
   }
 
-  const getRecommendations = (percent: number) => {
+    const getRecommendations = (percent: number) => {
     if (percent >= 70) {
       return [
         'Do not click links or open attachments.',
@@ -164,6 +274,45 @@ export default function Analyze() {
       'Report suspicious messages even when risk is low.',
     ]
   }
+
+  useEffect(() => {
+    if (activeTab !== 'url' || !preferences.auto_analyze || loading) return
+
+    const nextUrl = url.trim()
+    if (!nextUrl || nextUrl === lastAutoAnalyzedUrl.current) return
+    if (isWhitelistedDomain(nextUrl)) return
+
+        const timer = window.setTimeout(() => {
+      lastAutoAnalyzedUrl.current = nextUrl
+      void analyzeText()
+    }, 700)
+
+    return () => window.clearTimeout(timer)
+  }, [url, activeTab, preferences.auto_analyze, loading])
+
+  useEffect(() => {
+        const shortcutIds = ANALYZE_MACROS.map((macro) => `analyze-macro-${macro.id}`)
+
+    if (preferences.analysis_macros_enabled === false) {
+      shortcutIds.forEach((id) => unregisterShortcut(id))
+      return
+    }
+
+    ANALYZE_MACROS.forEach((macro, index) => {
+      registerShortcut(`analyze-macro-${macro.id}`, {
+        key: `${index + 1}`,
+        alt: true,
+        description: `Run analysis macro: ${macro.title}`,
+        action: () => {
+          void runMacro(macro)
+        }
+      })
+    })
+
+    return () => {
+      shortcutIds.forEach((id) => unregisterShortcut(id))
+    }
+  }, [preferences.analysis_macros_enabled, runMacro])
 
   if (result) {
     const risk = result.risk
@@ -309,6 +458,43 @@ export default function Analyze() {
             </Alert>
           </div>
 
+          {preferences.analysis_macros_enabled !== false && (
+            <div className="mb-6">
+              <Card>
+                <CardContent>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Sparkles className="w-5 h-5 text-amber-300" />
+                    <h3 className="text-white text-lg font-semibold">Analysis Macros</h3>
+                    <span className="ml-auto text-xs text-slate-400 flex items-center gap-1">
+                      <Keyboard className="w-4 h-4" />
+                      {ANALYZE_MACROS.map((macro) => macro.hotkey).join(' / ')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-400 mb-4">
+                    Run prepared phishing scenarios in one action for demo, training, and rapid validation.
+                  </p>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {ANALYZE_MACROS.map((macro) => (
+                      <button
+                        key={macro.id}
+                        onClick={() => {
+                          void runMacro(macro)
+                        }}
+                        className="text-left p-4 rounded-lg border border-slate-700 hover:border-blue-500/70 hover:bg-slate-800/60 transition"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold text-white">{macro.title}</span>
+                          <span className="text-[11px] px-2 py-1 rounded bg-slate-800 text-slate-300">{macro.hotkey}</span>
+                        </div>
+                        <p className="text-xs text-slate-400">{macro.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-slate-700">
             {(['screenshot', 'email', 'url'] as const).map(tab => (
@@ -386,6 +572,11 @@ export default function Analyze() {
           {activeTab === 'url' && (
             <Card>
               <CardContent>
+                {url.trim() && isWhitelistedDomain(url.trim()) && (
+                  <Alert variant="info" title="Trusted domain">
+                    This URL matches your trusted domain list, so PhishGuard will not auto-analyze it.
+                  </Alert>
+                )}
                 <input
                   type="text"
                   value={url}
@@ -394,8 +585,13 @@ export default function Analyze() {
                   className="w-full p-4 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 mb-4"
                 />
                 <Button onClick={analyzeText} disabled={!url.trim() || loading} fullWidth>
-                  {loading ? 'Checking...' : 'Check URL'}
+                  {loading ? 'Checking...' : preferences.auto_analyze ? 'Check URL Now' : 'Check URL'}
                 </Button>
+                {preferences.auto_analyze && (
+                  <p className="text-xs text-slate-500 mt-3">
+                    Auto-analyze is enabled. URL checks begin shortly after you stop typing.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

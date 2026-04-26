@@ -1,3 +1,10 @@
+"""Analytics utilities for PhishGuard Academy.
+This module provides functions to log user interactions and analysis events, as well as to compute summary statistics and trends over time.
+The log_event function allows for recording various types of events (e.g., analyses, challenges passed, lessons completed) with associated data. 
+The get_summary_stats function aggregates the logged events to provide an overview of user activity and risk levels. The get_daily_stats function breaks down the activity by day, while get_risk_distribution and get_activity_heatmap provide insights into the distribution of risk levels and the timing of user interactions, respectively.
+These analytics functions are essential for monitoring user engagement, understanding the effectiveness of the training materials, and providing feedback to users about their progress and areas for improvement.
+"""
+
 import json
 from datetime import datetime, timedelta
 from pathlib import Path

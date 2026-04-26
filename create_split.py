@@ -2,11 +2,17 @@
 """
 Step 5: Create stratified train/test split
 Ensures both classes have at least 20 samples in test set
+This script takes the full dataset of URLs and creates a stratified train/test split, ensuring that both the legitimate and phishing classes have at least 20 samples in the test set for reliable evaluation. 
+The resulting train and test sets are saved as separate CSV files for use in model training and evaluation.  
+The script calculates the appropriate test size based on the smallest class in the dataset to ensure that the test set is representative and provides sufficient samples for both classes. 
+It also prints out the class distribution in both the train and test sets for verification. 
+If the test set does not meet the minimum sample requirement, it issues a warning to alert the user about potential issues with evaluation reliability.
 """
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
 def main():
+    """Run the main CLI workflow for this module."""
     print("=" * 70)
     print("STEP 5: Creating Stratified Train/Test Split")
     print("=" * 70)

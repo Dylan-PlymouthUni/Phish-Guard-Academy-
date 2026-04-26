@@ -1,4 +1,16 @@
 // Persistent storage utility for PhishGuard Academy
+/**
+ * storage utility file.
+ * This file provides functions to manage user progress, settings, and analyses in the PhishGuard Academy application using localStorage for persistence.
+ * It includes functions to get and save progress, add points, complete lessons and challenges, record analyses, manage settings, and handle daily challenges.
+ * The utility also includes functions to export and reset data, as well as prune old analyses based on retention settings.
+ * It interacts with other modules such as progression for awarding XP and calculating levels.
+ * The file ensures that user data is stored securely and efficiently while providing a seamless experience across sessions.
+ * It also dispatches custom events to notify other parts of the application about updates to settings and level-ups.
+ * The utility is designed to be easily extendable for future features and improvements in the PhishGuard Academy application.
+ * It includes error handling to ensure that corrupted data does not break the application and provides default values when necessary.
+ * Overall, this file serves as the backbone for managing user data and preferences in the PhishGuard Academy, enabling a personalized and engaging learning experience for users as they improve their phishing detection skills.
+ */
 import { 
   awardXP, 
   getLevelFromXP, 
@@ -50,6 +62,20 @@ interface Settings {
   font_size?: 'small' | 'medium' | 'large'
   default_analyze_tab?: 'screenshot' | 'email' | 'url'
   compact_layout?: boolean
+  quiet_hours_enabled?: boolean
+  quiet_hours_start?: string
+  quiet_hours_end?: string
+  streak_reminder_time?: string
+  notification_priority?: 'low' | 'normal' | 'high'
+  challenge_complete_alert?: boolean
+  threat_detection_alert?: boolean
+  leaderboard_alert?: boolean
+  save_analysis_history?: boolean
+  retention_days?: 7 | 30 | 90 | 365
+  extension_auto_scan?: boolean
+  extension_inline_warnings?: boolean
+  extension_badge_alerts?: boolean
+  analysis_macros_enabled?: boolean
 }
 
 const STORAGE_KEYS = {
@@ -86,7 +112,42 @@ const DEFAULT_SETTINGS: Settings = {
   keyboard_shortcuts: true,
   font_size: 'medium',
   default_analyze_tab: 'screenshot',
-  compact_layout: false
+  compact_layout: false,
+  quiet_hours_enabled: false,
+  quiet_hours_start: '22:00',
+  quiet_hours_end: '08:00',
+  streak_reminder_time: '19:00',
+  notification_priority: 'normal',
+  challenge_complete_alert: true,
+  threat_detection_alert: true,
+  leaderboard_alert: false,
+  save_analysis_history: true,
+  retention_days: 90,
+  extension_auto_scan: true,
+  extension_inline_warnings: true,
+  extension_badge_alerts: true,
+  analysis_macros_enabled: true,
+}
+
+const dispatchSettingsUpdated = (settings: Settings) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('phishguard:settings-updated', { detail: settings }))
+  }
+}
+
+const pruneAnalysesByRetention = (retentionDays: number) => {
+  const current = getProgress()
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+    const filtered = (current.analyses_performed || []).filter((analysis) => {
+    return new Date(analysis.timestamp).getTime() >= cutoff
+  })
+
+  if (filtered.length !== (current.analyses_performed || []).length) {
+    localStorage.setItem(
+      STORAGE_KEYS.PROGRESS,
+      JSON.stringify({ ...current, analyses_performed: filtered })
+    )
+  }
 }
 
 // Progress Management
@@ -157,6 +218,11 @@ export const completeChallenge = (challengeId: string, points: number = XP_REWAR
 }
 
 export const recordAnalysis = (analysis: Omit<Analysis, 'id' | 'timestamp'>) => {
+  const settings = getSettings()
+  if (settings.save_analysis_history === false) {
+    return getProgress()
+  }
+
   const progress = getProgress()
   const newAnalysis: Analysis = {
     ...analysis,
@@ -164,8 +230,14 @@ export const recordAnalysis = (analysis: Omit<Analysis, 'id' | 'timestamp'>) => 
     timestamp: new Date().toISOString()
   }
   
+  const retentionDays = settings.retention_days || 90
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+    const retainedAnalyses = (progress.analyses_performed || []).filter((item) => {
+    return new Date(item.timestamp).getTime() >= cutoff
+  })
+
   const updated = saveProgress({
-    analyses_performed: [...progress.analyses_performed, newAnalysis]
+    analyses_performed: [...retainedAnalyses, newAnalysis]
   })
   
   // Award XP based on analysis type
@@ -184,7 +256,7 @@ export const recordAnalysis = (analysis: Omit<Analysis, 'id' | 'timestamp'>) => 
 export const getSettings = (): Settings => {
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.SETTINGS)
-    return stored ? JSON.parse(stored) : DEFAULT_SETTINGS
+    return stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS
   } catch {
     return DEFAULT_SETTINGS
   }
@@ -194,11 +266,19 @@ export const saveSettings = (settings: Partial<Settings>) => {
   const current = getSettings()
   const updated = { ...current, ...settings }
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated))
+
+  if (updated.retention_days) {
+    pruneAnalysesByRetention(updated.retention_days)
+  }
+
+  dispatchSettingsUpdated(updated)
   return updated
 }
 
 export const resetSettings = () => {
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS))
+  pruneAnalysesByRetention(DEFAULT_SETTINGS.retention_days || 90)
+  dispatchSettingsUpdated(DEFAULT_SETTINGS)
   return DEFAULT_SETTINGS
 }
 
@@ -248,6 +328,16 @@ export const resetAllData = () => {
 export const getAnalyses = (): Analysis[] => {
   const progress = getProgress()
   return progress.analyses_performed || []
+}
+
+export const clearAnalysisHistory = () => {
+  const progress = getProgress()
+  const updated = {
+    ...progress,
+    analyses_performed: []
+  }
+  localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(updated))
+  return updated
 }
 
 // Daily Challenge System

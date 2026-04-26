@@ -1,4 +1,9 @@
-import { Bell, Shield, Palette, Lock, Database, Download, RotateCcw, Trash2, Eye, Key, Brain, Zap, Award, Sparkles, X, LogOut } from 'lucide-react'
+/**
+ * Settings component/module file.
+  * This file defines the Settings page, which allows users to customize their preferences and account settings in the PhishGuard Academy application.
+ */
+
+import { Bell, Shield, Palette, Lock, Database, Download, RotateCcw, Trash2, Eye, Brain, Zap, Award, Sparkles, X, LogOut, User, KeyRound, Clock, Info, HardDrive, CheckCircle2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -8,8 +13,8 @@ import { Button } from '../components/ui/Button'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Toast } from '../components/ui/Toast'
-import { getSettings, saveSettings as saveToStorage, resetSettings as resetToDefaults, exportAllData, resetAllData } from '../utils/storage'
-import { applyCompactLayout, applyFontSize } from '../utils/settingsEffects'
+import { getSettings, saveSettings as saveToStorage, resetSettings as resetToDefaults, exportAllData, resetAllData, clearAnalysisHistory } from '../utils/storage'
+import { applyCompactLayout, applyFontSize, getNotificationPermissionState, requestNotificationPermission, sendTestNotification } from '../utils/settingsEffects'
 import { useAuth } from '../contexts/AuthContext'
 
 interface Settings {
@@ -30,10 +35,22 @@ interface Settings {
   font_size?: 'small' | 'medium' | 'large'
   default_analyze_tab?: 'screenshot' | 'email' | 'url'
   compact_layout?: boolean
+  // Notifications extended
+  quiet_hours_enabled?: boolean
+  quiet_hours_start?: string
+  quiet_hours_end?: string
+  streak_reminder_time?: string
+  notification_priority?: 'low' | 'normal' | 'high'
+  challenge_complete_alert?: boolean
+  threat_detection_alert?: boolean
+  leaderboard_alert?: boolean
+  save_analysis_history?: boolean
+  retention_days?: 7 | 30 | 90 | 365
+  analysis_macros_enabled?: boolean
 }
 
 export default function SettingsPage() {
-  const { token, logout } = useAuth()
+  const { user, token, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
   const [settings, setSettings] = useState<Settings>({
     notifications: true,
@@ -50,23 +67,44 @@ export default function SettingsPage() {
     auto_analyze: true,
     show_confidence: true,
     keyboard_shortcuts: true,
+    analysis_macros_enabled: true,
     font_size: 'medium',
     default_analyze_tab: 'screenshot',
-    compact_layout: false
+    compact_layout: false,
+    save_analysis_history: true,
+    retention_days: 90,
   })
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'general' | 'notifications' | 'ml' | 'data'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'notifications' | 'ml' | 'account' | 'data'>('general')
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
+  const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('success')
   const [mfaStatus, setMfaStatus] = useState<{ mfa_enabled: boolean; backup_codes_remaining: number; setup_complete: boolean } | null>(null)
   const [mfaSetup, setMfaSetup] = useState<{ qr_code: string; secret: string; backup_codes: string[] } | null>(null)
   const [mfaCode, setMfaCode] = useState('')
   const [mfaPassword, setMfaPassword] = useState('')
   const [mfaLoading, setMfaLoading] = useState(false)
   const [whitelistInput, setWhitelistInput] = useState('')
+  const [displayNameInput, setDisplayNameInput] = useState('')
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileSaved, setProfileSaved] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' })
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [storageUsage, setStorageUsage] = useState<{ used: number; quota: number } | null>(null)
+  const [notificationPermission, setNotificationPermission] = useState<'default' | 'denied' | 'granted' | 'unsupported'>('unsupported')
+  const [notificationPreview, setNotificationPreview] = useState<{
+    tone: 'success' | 'warning' | 'error' | 'info'
+    title: string
+    detail: string
+  } | null>(null)
+  const [notificationTestCount, setNotificationTestCount] = useState(0)
+  const [notificationLastTestAt, setNotificationLastTestAt] = useState<string | null>(null)
 
   useEffect(() => {
     fetchSettings()
+    estimateStorageUsage()
+    setNotificationPermission(getNotificationPermissionState() as 'default' | 'denied' | 'granted' | 'unsupported')
   }, [])
 
   useEffect(() => {
@@ -75,10 +113,27 @@ export default function SettingsPage() {
     }
   }, [token])
 
-  const fetchSettings = async () => {
+  useEffect(() => {
+    if (user) setDisplayNameInput(user.name || '')
+  }, [user])
+
+    const fetchSettings = async () => {
     try {
       const data = getSettings() as Settings
-      setSettings(data)
+      setSettings({
+        ...data,
+        quiet_hours_enabled: data.quiet_hours_enabled ?? false,
+        quiet_hours_start: data.quiet_hours_start ?? '22:00',
+        quiet_hours_end: data.quiet_hours_end ?? '08:00',
+        streak_reminder_time: data.streak_reminder_time ?? '19:00',
+        notification_priority: data.notification_priority ?? 'normal',
+        challenge_complete_alert: data.challenge_complete_alert ?? true,
+        threat_detection_alert: data.threat_detection_alert ?? true,
+        leaderboard_alert: data.leaderboard_alert ?? false,
+        save_analysis_history: data.save_analysis_history ?? true,
+        retention_days: data.retention_days ?? 90,
+        analysis_macros_enabled: data.analysis_macros_enabled ?? true,
+      })
     } catch (err) {
       console.error('Failed to fetch settings:', err)
     } finally {
@@ -86,7 +141,90 @@ export default function SettingsPage() {
     }
   }
 
-  const fetchMfaStatus = async () => {
+    const estimateStorageUsage = () => {
+    try {
+      let used = 0
+      for (const key in localStorage) {
+        if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
+          used += (localStorage.getItem(key) || '').length * 2 // UTF-16 bytes
+        }
+      }
+      setStorageUsage({ used, quota: 5 * 1024 * 1024 })
+    } catch {
+      // storage API not available
+    }
+  }
+
+    const saveDisplayName = async () => {
+    if (!token || !displayNameInput.trim()) return
+    setProfileSaving(true)
+    try {
+      const nextName = displayNameInput.trim()
+      const res = await fetch(`/api/auth/profile?name=${encodeURIComponent(nextName)}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        await refreshUser()
+        setDisplayNameInput(nextName)
+        setProfileSaved(true)
+        setTimeout(() => setProfileSaved(false), 3000)
+        setToastType('success')
+        setToastMessage('Display name updated.')
+        setShowToast(true)
+      } else {
+                const err = await res.json().catch(() => ({}))
+        setToastType('error')
+        setToastMessage(err.detail || 'Could not update name.')
+        setShowToast(true)
+      }
+    } catch {
+      setToastType('error')
+      setToastMessage('Network error.')
+      setShowToast(true)
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+    const changePassword = async () => {
+    setPasswordError(null)
+    if (!passwordForm.next || passwordForm.next.length < 8) {
+      setPasswordError('New password must be at least 8 characters.')
+      return
+    }
+    if (passwordForm.next !== passwordForm.confirm) {
+      setPasswordError('Passwords do not match.')
+      return
+    }
+    if (!passwordForm.current) {
+      setPasswordError('Enter your current password.')
+      return
+    }
+    setPasswordSaving(true)
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: passwordForm.current, new_password: passwordForm.next }),
+      })
+      if (res.ok) {
+        setPasswordForm({ current: '', next: '', confirm: '' })
+        setToastType('success')
+        setToastMessage('Password changed successfully.')
+        setShowToast(true)
+      } else {
+                const err = await res.json().catch(() => ({}))
+        setPasswordError(err.detail || 'Failed to change password.')
+      }
+    } catch {
+      setPasswordError('Network error. Try again.')
+    } finally {
+      setPasswordSaving(false)
+    }
+  }
+
+    const fetchMfaStatus = async () => {
     if (!token) return
     try {
       const res = await fetch('/api/mfa/status', {
@@ -101,7 +239,7 @@ export default function SettingsPage() {
     }
   }
 
-  const startMfaSetup = async () => {
+    const startMfaSetup = async () => {
     if (!token) return
     setMfaLoading(true)
     try {
@@ -116,10 +254,12 @@ export default function SettingsPage() {
       const data = await res.json()
       setMfaSetup(data)
       setMfaCode('')
+      setToastType('info')
       setToastMessage('Scan the QR with your authenticator app')
       setShowToast(true)
     } catch (err) {
       console.error(err)
+      setToastType('error')
       setToastMessage(err instanceof Error ? err.message : 'Failed to start MFA')
       setShowToast(true)
     } finally {
@@ -127,12 +267,12 @@ export default function SettingsPage() {
     }
   }
 
-  const handleLogout = () => {
+    const handleLogout = () => {
     logout()
     navigate('/login')
   }
 
-  const verifyMfaSetup = async () => {
+    const verifyMfaSetup = async () => {
     if (!token || !mfaCode) return
     setMfaLoading(true)
     try {
@@ -148,6 +288,7 @@ export default function SettingsPage() {
         const error = await res.json()
         throw new Error(error.detail || 'Invalid code')
       }
+      setToastType('success')
       setToastMessage('MFA enabled successfully')
       setShowToast(true)
       setMfaSetup(null)
@@ -155,6 +296,7 @@ export default function SettingsPage() {
       await fetchMfaStatus()
     } catch (err) {
       console.error(err)
+      setToastType('error')
       setToastMessage(err instanceof Error ? err.message : 'Verification failed')
       setShowToast(true)
     } finally {
@@ -162,7 +304,7 @@ export default function SettingsPage() {
     }
   }
 
-  const disableMfa = async () => {
+    const disableMfa = async () => {
     if (!token) return
     setMfaLoading(true)
     try {
@@ -178,6 +320,7 @@ export default function SettingsPage() {
         const error = await res.json()
         throw new Error(error.detail || 'Failed to disable')
       }
+      setToastType('success')
       setToastMessage('MFA disabled')
       setShowToast(true)
       setMfaStatus({ mfa_enabled: false, backup_codes_remaining: 0, setup_complete: false })
@@ -186,6 +329,7 @@ export default function SettingsPage() {
       setMfaCode('')
     } catch (err) {
       console.error(err)
+      setToastType('error')
       setToastMessage(err instanceof Error ? err.message : 'Failed to disable MFA')
       setShowToast(true)
     } finally {
@@ -193,11 +337,12 @@ export default function SettingsPage() {
     }
   }
 
-  const updateSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
+    const updateSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     const updated = { ...settings, [key]: value }
     setSettings(updated)
     // Auto-save immediately
     saveToStorage(updated)
+    estimateStorageUsage()
 
     if (key === 'font_size') {
       applyFontSize(value as 'small' | 'medium' | 'large')
@@ -212,72 +357,158 @@ export default function SettingsPage() {
     }
 
     if (key === 'difficulty_preference') {
+      setToastType('info')
       setToastMessage(`Difficulty preference set to ${value}.`)
       setShowToast(true)
     }
   }
 
-  const resetSettings = async () => {
+    const showFeedback = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+    setToastType(type)
+    setToastMessage(message)
+    setShowToast(true)
+  }
+
+    const requestBrowserNotifications = async () => {
+    const permission = await requestNotificationPermission()
+    setNotificationPermission(permission as 'default' | 'denied' | 'granted' | 'unsupported')
+    if (permission === 'granted') {
+      showFeedback('Browser notifications enabled.', 'success')
+      return
+    }
+    if (permission === 'denied') {
+      showFeedback('Notifications are blocked in your browser.', 'warning')
+      return
+    }
+    showFeedback('Notification permission not changed.', 'info')
+  }
+
+    const triggerTestNotification = async () => {
+    setNotificationTestCount((count) => count + 1)
+    setNotificationLastTestAt(new Date().toLocaleTimeString())
+    showFeedback('Notification test button clicked.', 'info')
+
+    const showPreview = (
+      tone: 'success' | 'warning' | 'error' | 'info',
+      title: string,
+      detail: string
+    ) => {
+      setNotificationPreview({ tone, title, detail })
+    }
+
+    showPreview('info', 'Running notification test', 'Checking browser and app notification pipeline...')
+
+    let result: Awaited<ReturnType<typeof sendTestNotification>>
+    try {
+      result = await sendTestNotification()
+    } catch {
+      showPreview('error', 'Notification test crashed', 'The browser API threw an unexpected error. Check console and browser settings.')
+      showFeedback('Notification test failed unexpectedly.', 'error')
+      return
+    }
+
+    if (result === 'sent') {
+      showPreview(
+        'success',
+        'PhishGuard test notification delivered',
+        'The test event fired. If you did not see a native popup, check your OS notification center and browser-level delivery style.'
+      )
+      showFeedback('Test notification sent.', 'success')
+      return
+    }
+    if (result === 'blocked-master') {
+      showPreview('warning', 'Notifications are turned off', 'Enable the main Notifications toggle above, then run the test again.')
+      showFeedback('Enable notifications first using the master switch.', 'warning')
+      return
+    }
+    if (result === 'permission-denied') {
+      showPreview('warning', 'Browser permission is blocked', 'Allow notifications for this site in browser settings, then retry.')
+      showFeedback('Browser notifications are blocked. Re-enable them in site settings.', 'warning')
+      return
+    }
+    if (result === 'unsupported') {
+      showPreview('error', 'Notifications not supported', 'This browser/runtime does not support the Notification API.')
+      showFeedback('This browser does not support Notifications.', 'error')
+      return
+    }
+    if (result === 'insecure-context') {
+      showPreview('warning', 'Insecure context', 'Notifications require localhost or HTTPS. Open this app on a secure origin.')
+      showFeedback('Notifications require a secure context. Use localhost or HTTPS.', 'warning')
+      return
+    }
+    if (result === 'failed') {
+      showPreview('error', 'Browser rejected notification', 'The API call failed even with permission granted. Check OS/browser notification settings.')
+      showFeedback('The browser rejected the notification. Check OS-level notification settings.', 'error')
+      return
+    }
+
+    showPreview('warning', 'Notification not delivered', 'The notification request did not complete. Try requesting permission again.')
+    showFeedback('Notification could not be delivered.', 'warning')
+  }
+
+    const clearLocalAnalyses = () => {
+    clearAnalysisHistory()
+    estimateStorageUsage()
+    showFeedback('Analysis history cleared from this device.', 'success')
+  }
+
+    const resetSettings = async () => {
     if (confirm('Reset all settings to defaults?')) {
       try {
         const defaults = resetToDefaults()
         setSettings(defaults)
+        estimateStorageUsage()
       } catch (err) {
         console.error('Failed to reset:', err)
       }
     }
   }
 
-  const resetDisplaySettings = () => {
+    const resetDisplaySettings = () => {
     updateSetting('font_size', 'medium')
     updateSetting('reduced_motion', false)
     updateSetting('compact_layout', false)
-    setToastMessage('Display settings reset to default view.')
-    setShowToast(true)
+    showFeedback('Display settings reset to default view.', 'success')
   }
 
-  const normalizeDomain = (value: string) =>
+    const normalizeDomain = (value: string) =>
     value
       .trim()
       .toLowerCase()
       .replace(/^https?:\/\//, '')
       .replace(/\/$/, '')
 
-  const isValidTrustedDomain = (domain: string) => {
+    const isValidTrustedDomain = (domain: string) => {
     if (domain === 'localhost') return true
     if (/^localhost:\d+$/.test(domain)) return true
     if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return true
     return false
   }
 
-  const addTrustedDomain = () => {
+    const addTrustedDomain = () => {
     const domain = normalizeDomain(whitelistInput)
 
     if (!domain) {
-      setToastMessage('Enter a domain before adding it.')
-      setShowToast(true)
+      showFeedback('Enter a domain before adding it.', 'warning')
       return
     }
 
     if (!isValidTrustedDomain(domain)) {
-      setToastMessage('Use a valid domain (example.com) or localhost.')
-      setShowToast(true)
+      showFeedback('Use a valid domain (example.com) or localhost.', 'warning')
       return
     }
 
     if (settings.ml_whitelist?.includes(domain)) {
-      setToastMessage(`${domain} is already in your trusted list.`)
-      setShowToast(true)
+      showFeedback(`${domain} is already in your trusted list.`, 'info')
       return
     }
 
     updateSetting('ml_whitelist', [...(settings.ml_whitelist || []), domain])
     setWhitelistInput('')
-    setToastMessage(`Added ${domain} to trusted websites.`)
-    setShowToast(true)
+    showFeedback(`Added ${domain} to trusted websites.`, 'success')
   }
 
-  const applyProtectionPreset = (preset: 'security-first' | 'balanced' | 'quiet') => {
+    const applyProtectionPreset = (preset: 'security-first' | 'balanced' | 'quiet') => {
     if (preset === 'security-first') {
       const updated = {
         ...settings,
@@ -288,8 +519,7 @@ export default function SettingsPage() {
       }
       setSettings(updated)
       saveToStorage(updated)
-      setToastMessage('Applied preset: Security First')
-      setShowToast(true)
+      showFeedback('Applied preset: Security First', 'success')
       return
     }
 
@@ -303,8 +533,7 @@ export default function SettingsPage() {
       }
       setSettings(updated)
       saveToStorage(updated)
-      setToastMessage('Applied preset: Balanced')
-      setShowToast(true)
+      showFeedback('Applied preset: Balanced', 'success')
       return
     }
 
@@ -317,11 +546,10 @@ export default function SettingsPage() {
     }
     setSettings(updated)
     saveToStorage(updated)
-    setToastMessage('Applied preset: Quiet Mode')
-    setShowToast(true)
+    showFeedback('Applied preset: Quiet Mode', 'success')
   }
 
-  const exportData = () => {
+    const exportData = () => {
     const data = exportAllData()
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -346,6 +574,7 @@ export default function SettingsPage() {
     { id: 'general', label: 'General', icon: Palette },
     { id: 'ml', label: 'ML Detection', icon: Brain },
     { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'account', label: 'Account', icon: User },
     { id: 'data', label: 'Data', icon: Database }
   ] as const
 
@@ -363,6 +592,37 @@ export default function SettingsPage() {
             All changes save automatically
           </p>
         </div>
+
+        {/* Profile Banner */}
+        {user && (
+          <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-slate-800/80 via-slate-800/60 to-slate-800/80 border border-slate-700/60 flex items-center gap-5">
+            {/* Avatar */}
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-lg">
+              <span className="text-2xl font-bold text-white">
+                {user.name?.charAt(0).toUpperCase() ?? '?'}
+              </span>
+            </div>
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="text-white font-bold text-xl truncate">{user.name}</div>
+              <div className="text-slate-400 text-sm truncate">{user.email}</div>
+              <div className="flex flex-wrap items-center gap-3 mt-2">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-medium">Level {user.level}</span>
+                <span className="text-xs text-slate-400">{user.xp.toLocaleString()} XP</span>
+                {user.streak > 0 && (
+                  <span className="text-xs text-orange-300">🔥 {user.streak} day streak</span>
+                )}
+              </div>
+            </div>
+            {/* Quick link to account tab */}
+            <button
+              onClick={() => setActiveTab('account')}
+              className="text-xs text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-slate-700/50 transition whitespace-nowrap flex-shrink-0"
+            >
+              Edit Profile
+            </button>
+          </div>
+        )}
 
         {/* Enhanced tabs with icons */}
         <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
@@ -454,6 +714,22 @@ export default function SettingsPage() {
                         type="checkbox"
                         checked={!!settings.keyboard_shortcuts}
                         onChange={(e) => updateSetting('keyboard_shortcuts', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">Analysis Macros</div>
+                      <div className="text-sm text-slate-400">Enable one-tap phishing analysis templates in Analyze (Alt+1/2/3/4)</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.analysis_macros_enabled !== false}
+                        onChange={(e) => updateSetting('analysis_macros_enabled', e.target.checked)}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
@@ -898,7 +1174,7 @@ export default function SettingsPage() {
                       </div>
                       <button
                         onClick={() => {
-                          const newWhitelist = settings.ml_whitelist?.filter((_, i) => i !== index)
+                                                    const newWhitelist = settings.ml_whitelist?.filter((_, i) => i !== index)
                           updateSetting('ml_whitelist', newWhitelist)
                           setToastMessage(`Removed ${domain} from trusted websites.`)
                           setShowToast(true)
@@ -1020,92 +1296,517 @@ export default function SettingsPage() {
 
         {activeTab === 'notifications' && (
           <div className="space-y-6">
+            {/* Master switch */}
             <Card>
               <CardContent>
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-blue-400" />
-                  Notification Preferences
-                </h3>
-                
-                <div className="space-y-3">
-                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
-                    <div>
-                      <div className="text-white font-medium">Push Notifications</div>
-                      <div className="text-sm text-slate-400">Get browser notifications</div>
-                    </div>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Bell className="w-5 h-5 text-blue-400" />
+                      Notifications
+                      {settings.notifications
+                        ? <Badge variant="success">On</Badge>
+                        : <Badge variant="warning">Off</Badge>}
+                    </h3>
+                    <p className="text-sm text-slate-400 mt-1">Master switch — disabling this silences all notifications below.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
                     <input
                       type="checkbox"
                       checked={settings.notifications}
                       onChange={(e) => updateSetting('notifications', e.target.checked)}
-                      className="w-5 h-5 rounded"
+                      className="sr-only peer"
                     />
-                  </label>
-
-                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
-                    <div>
-                      <div className="text-white font-medium">Email Alerts</div>
-                      <div className="text-sm text-slate-400">Receive email notifications</div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.email_alerts}
-                      onChange={(e) => updateSetting('email_alerts', e.target.checked)}
-                      className="w-5 h-5 rounded"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
-                    <div>
-                      <div className="text-white font-medium">Daily Reminder</div>
-                      <div className="text-sm text-slate-400">Daily practice reminders</div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.daily_reminder}
-                      onChange={(e) => updateSetting('daily_reminder', e.target.checked)}
-                      className="w-5 h-5 rounded"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg cursor-pointer hover:bg-slate-800/50 transition">
-                    <div>
-                      <div className="text-white font-medium">Weekly Report</div>
-                      <div className="text-sm text-slate-400">Weekly progress summary</div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.weekly_report}
-                      onChange={(e) => updateSetting('weekly_report', e.target.checked)}
-                      className="w-5 h-5 rounded"
-                    />
+                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
                   </label>
                 </div>
               </CardContent>
             </Card>
 
-            <Alert variant="info">
-              💡 Notifications help you stay on track with your learning goals.
-            </Alert>
+            {/* Channels */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-purple-400" />
+                  Channels
+                </h3>
+                <div className="space-y-3">
+                  {/* Email */}
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">Email Alerts</div>
+                      <div className="text-sm text-slate-400">Critical threat detections sent to your inbox</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input type="checkbox" checked={settings.email_alerts} onChange={(e) => updateSetting('email_alerts', e.target.checked)} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  {/* Priority */}
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div className="flex-1 pr-4">
+                      <div className="text-white font-medium mb-1">Notification Priority</div>
+                      <div className="text-sm text-slate-400">Controls urgency level of browser alerts</div>
+                    </div>
+                    <select
+                      value={settings.notification_priority ?? 'normal'}
+                      onChange={(e) => updateSetting('notification_priority', e.target.value as 'low' | 'normal' | 'high')}
+                      className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
+                    >
+                      <option value="low">Low</option>
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  Browser Permission
+                </h3>
+                <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
+                  <div className="flex items-center justify-between gap-4 mb-3">
+                    <div>
+                      <div className="text-white font-medium">Notification Access</div>
+                      <div className="text-sm text-slate-400">Needed for browser alerts and daily reminders.</div>
+                    </div>
+                    <Badge variant={notificationPermission === 'granted' ? 'success' : notificationPermission === 'denied' ? 'warning' : 'default'}>
+                      {notificationPermission}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="primary" onClick={requestBrowserNotifications}>
+                      Request Permission
+                    </Button>
+                    <Button variant="secondary" onClick={triggerTestNotification}>
+                      Send Test Notification
+                    </Button>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-3">
+                    {notificationPermission !== 'granted'
+                      ? 'Notifications will not appear until browser permission is granted.'
+                      : settings.quiet_hours_enabled
+                        ? 'Manual test notifications bypass quiet hours. Scheduled reminders do not.'
+                        : 'Notifications are ready. Use the test button to verify browser delivery.'}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Test clicks recorded: {notificationTestCount}{notificationLastTestAt ? ` (last at ${notificationLastTestAt})` : ''}
+                  </div>
+
+                  {notificationPreview && (
+                    <div className={`mt-4 rounded-xl p-4 border ${
+                      notificationPreview.tone === 'success'
+                        ? 'border-emerald-500/30 bg-emerald-500/10'
+                        : notificationPreview.tone === 'error'
+                          ? 'border-red-500/30 bg-red-500/10'
+                          : notificationPreview.tone === 'warning'
+                            ? 'border-yellow-500/30 bg-yellow-500/10'
+                            : 'border-blue-500/30 bg-blue-500/10'
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 text-lg">🔔</div>
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold text-white">{notificationPreview.title}</div>
+                          <div className="mt-1 text-sm text-slate-300">
+                            {notificationPreview.detail}
+                          </div>
+                          <div className="mt-2 text-xs text-slate-400">This status card is generated by the app and confirms what happened to your test request.</div>
+                        </div>
+                        <button
+                          onClick={() => setNotificationPreview(null)}
+                          className="text-slate-400 hover:text-white text-sm"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Notification types */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-yellow-400" />
+                  Notification Types
+                </h3>
+                <p className="text-sm text-slate-400 mb-4">Choose which events trigger a notification.</p>
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">🚨 Threat Detected</div>
+                      <div className="text-sm text-slate-400">Alert when a phishing attempt is found</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input type="checkbox" checked={settings.threat_detection_alert ?? true} onChange={(e) => updateSetting('threat_detection_alert', e.target.checked)} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-red-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">🎯 Challenge Completed</div>
+                      <div className="text-sm text-slate-400">Notify when you finish a training challenge</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input type="checkbox" checked={settings.challenge_complete_alert ?? true} onChange={(e) => updateSetting('challenge_complete_alert', e.target.checked)} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">🏆 Leaderboard Changes</div>
+                      <div className="text-sm text-slate-400">Get notified when your rank changes</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input type="checkbox" checked={settings.leaderboard_alert ?? false} onChange={(e) => updateSetting('leaderboard_alert', e.target.checked)} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-yellow-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">📅 Weekly Report</div>
+                      <div className="text-sm text-slate-400">A summary of your weekly progress</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input type="checkbox" checked={settings.weekly_report ?? false} onChange={(e) => updateSetting('weekly_report', e.target.checked)} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Reminders */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-orange-400" />
+                  Reminders
+                </h3>
+                <p className="text-sm text-slate-400 mb-4">Keep your streak alive with scheduled reminders.</p>
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">Daily Practice Reminder</div>
+                      <div className="text-sm text-slate-400">Nudge to complete at least one challenge daily</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input type="checkbox" checked={settings.daily_reminder ?? true} onChange={(e) => updateSetting('daily_reminder', e.target.checked)} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-orange-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  {settings.daily_reminder && (
+                    <div className="flex items-center justify-between px-4 py-3 bg-slate-800/20 rounded-lg border border-slate-700/50">
+                      <div>
+                        <div className="text-sm text-slate-300 font-medium">Reminder Time</div>
+                        <div className="text-xs text-slate-500">When should we remind you?</div>
+                      </div>
+                      <input
+                        type="time"
+                        value={settings.streak_reminder_time ?? '19:00'}
+                        onChange={(e) => updateSetting('streak_reminder_time', e.target.value)}
+                        className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quiet hours */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-indigo-400" />
+                  Quiet Hours (Do Not Disturb)
+                </h3>
+                <p className="text-sm text-slate-400 mb-4">Suppress all non-critical notifications during these hours.</p>
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">Enable Quiet Hours</div>
+                      <div className="text-sm text-slate-400">Only threat alerts will get through</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input type="checkbox" checked={settings.quiet_hours_enabled ?? false} onChange={(e) => updateSetting('quiet_hours_enabled', e.target.checked)} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  {settings.quiet_hours_enabled && (
+                    <div className="grid grid-cols-2 gap-3 px-1">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">From</label>
+                        <input
+                          type="time"
+                          value={settings.quiet_hours_start ?? '22:00'}
+                          onChange={(e) => updateSetting('quiet_hours_start', e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Until</label>
+                        <input
+                          type="time"
+                          value={settings.quiet_hours_end ?? '08:00'}
+                          onChange={(e) => updateSetting('quiet_hours_end', e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <p className="col-span-2 text-xs text-slate-500 italic">
+                        Quiet hours apply to reminders and progress alerts. Threat detections always show.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+
+        {activeTab === 'account' && (
+          <div className="space-y-6">
+            {/* Profile editing */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <User className="w-5 h-5 text-blue-400" />
+                  Profile
+                </h3>
+
+                {!token && (
+                  <Alert variant="info">Log in to manage your profile.</Alert>
+                )}
+
+                {token && user && (
+                  <div className="space-y-4">
+                    {/* Avatar + name row */}
+                    <div className="flex items-center gap-4 p-4 bg-slate-800/30 rounded-lg">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-md">
+                        <span className="text-xl font-bold text-white">
+                          {user.name?.charAt(0).toUpperCase() ?? '?'}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-white font-semibold">{user.name}</div>
+                        <div className="text-slate-400 text-sm">{user.email}</div>
+                        <div className="text-slate-500 text-xs mt-0.5">
+                          Member since {new Date(user.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: 'long' })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Edit display name */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Display Name</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={displayNameInput}
+                          onChange={e => setDisplayNameInput(e.target.value)}
+                          maxLength={40}
+                          className="flex-1 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                          placeholder="Your display name"
+                        />
+                        <Button
+                          onClick={saveDisplayName}
+                          disabled={profileSaving || !displayNameInput.trim() || displayNameInput.trim() === user.name}
+                          variant="primary"
+                        >
+                          {profileSaving ? 'Saving…' : profileSaved ? '✓ Saved' : 'Save'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Stats row */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 bg-slate-800/40 rounded-lg text-center border border-slate-700/50">
+                        <div className="text-2xl font-bold text-blue-300">{user.level}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">Level</div>
+                      </div>
+                      <div className="p-3 bg-slate-800/40 rounded-lg text-center border border-slate-700/50">
+                        <div className="text-2xl font-bold text-purple-300">{user.xp.toLocaleString()}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">XP Earned</div>
+                      </div>
+                      <div className="p-3 bg-slate-800/40 rounded-lg text-center border border-slate-700/50">
+                        <div className="text-2xl font-bold text-orange-300">{user.streak}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">Day Streak</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Change password */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-purple-400" />
+                  Change Password
+                </h3>
+
+                {!token ? (
+                  <Alert variant="info">Log in to change your password.</Alert>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Current Password</label>
+                      <input
+                        type="password"
+                        value={passwordForm.current}
+                        onChange={e => setPasswordForm(f => ({ ...f, current: e.target.value }))}
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-purple-500 text-sm"
+                        placeholder="••••••••"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">New Password</label>
+                      <input
+                        type="password"
+                        value={passwordForm.next}
+                        onChange={e => setPasswordForm(f => ({ ...f, next: e.target.value }))}
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-purple-500 text-sm"
+                        placeholder="At least 8 characters"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Confirm New Password</label>
+                      <input
+                        type="password"
+                        value={passwordForm.confirm}
+                        onChange={e => setPasswordForm(f => ({ ...f, confirm: e.target.value }))}
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-purple-500 text-sm"
+                        placeholder="••••••••"
+                      />
+                    </div>
+
+                    {passwordError && (
+                      <Alert variant="error">{passwordError}</Alert>
+                    )}
+
+                    <div className="pt-1">
+                      <Button
+                        onClick={changePassword}
+                        disabled={passwordSaving || !passwordForm.current || !passwordForm.next || !passwordForm.confirm}
+                        variant="primary"
+                      >
+                        {passwordSaving ? 'Changing…' : 'Change Password'}
+                      </Button>
+                    </div>
+
+                    <div className="text-xs text-slate-500">
+                      Use a strong password with uppercase, numbers, and symbols for best security.
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Session info */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Info className="w-5 h-5 text-cyan-400" />
+                  Session Info
+                </h3>
+                <div className="space-y-2 text-sm text-slate-300">
+                  <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
+                    <span className="text-slate-400">Status</span>
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                      Active session
+                    </span>
+                  </div>
+                  {user && (
+                    <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
+                      <span className="text-slate-400">User ID</span>
+                      <code className="text-xs text-slate-300">{user.user_id}</code>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
+                    <span className="text-slate-400">Authentication</span>
+                    <span className="flex items-center gap-2">
+                      {mfaStatus?.mfa_enabled ? (
+                        <><CheckCircle2 className="w-4 h-4 text-green-400" /><span className="text-green-300 text-xs">MFA active</span></>
+                      ) : (
+                        <span className="text-yellow-300 text-xs">Password only</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <Button variant="secondary" onClick={() => { logout(); navigate('/login') }} fullWidth>
+                      <span className="flex items-center justify-center gap-2"><LogOut className="w-4 h-4" /> Sign Out</span>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
 
         {activeTab === 'data' && (
           <div className="space-y-6">
+            {/* Storage usage */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <HardDrive className="w-5 h-5 text-cyan-400" />
+                  Local Storage Usage
+                </h3>
+                {storageUsage ? (
+                  <div>
+                    <div className="flex items-end justify-between mb-2">
+                      <span className="text-sm text-slate-400">
+                        {(storageUsage.used / 1024).toFixed(1)} KB used of&nbsp;
+                        {(storageUsage.quota / 1024 / 1024).toFixed(0)} MB
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {((storageUsage.used / storageUsage.quota) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all"
+                        style={{ width: `${Math.min((storageUsage.used / storageUsage.quota) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">Stores your settings, progress, and cached analyses.</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">Storage estimate unavailable.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Export / Import */}
             <Card>
               <CardContent>
                 <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                   <Database className="w-5 h-5 text-blue-400" />
-                  Data Management
+                  Backup &amp; Restore
                 </h3>
-                
+
                 <div className="space-y-4">
                   <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                     <div className="flex items-start gap-3 mb-3">
-                      <Download className="w-5 h-5 text-blue-400 mt-1" />
+                      <Download className="w-5 h-5 text-blue-400 mt-0.5" />
                       <div>
-                        <div className="text-white font-medium mb-1">Export Your Data</div>
-                        <div className="text-sm text-slate-400">Download all settings and progress</div>
+                        <div className="text-white font-medium mb-0.5">Export Your Data</div>
+                        <div className="text-sm text-slate-400">Download all settings, progress, and analyses as JSON</div>
                       </div>
                     </div>
                     <Button onClick={exportData} variant="primary" fullWidth>
@@ -1113,12 +1814,118 @@ export default function SettingsPage() {
                     </Button>
                   </div>
 
+                  <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                    <div className="flex items-start gap-3 mb-3">
+                      <Database className="w-5 h-5 text-purple-400 mt-0.5" />
+                      <div>
+                        <div className="text-white font-medium mb-0.5">Import Data</div>
+                        <div className="text-sm text-slate-400">Restore from a previously exported JSON file</div>
+                      </div>
+                    </div>
+                    <label className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg cursor-pointer transition font-medium text-sm">
+                      📂 Choose File to Import
+                      <input
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          const reader = new FileReader()
+                          reader.onload = (ev) => {
+                            try {
+                              const parsed = JSON.parse(ev.target?.result as string)
+                              if (parsed.settings) {
+                                saveToStorage(parsed.settings)
+                                setSettings(parsed.settings)
+                                estimateStorageUsage()
+                                setToastMessage('Data imported successfully.')
+                                setShowToast(true)
+                              } else {
+                                setToastMessage('Invalid file — no settings found.')
+                                setShowToast(true)
+                              }
+                            } catch {
+                              setToastMessage('Could not read file.')
+                              setShowToast(true)
+                            }
+                          }
+                          reader.readAsText(file)
+                          // reset so same file can be chosen again
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-emerald-400" />
+                  Privacy &amp; Retention
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div className="flex-1 pr-4">
+                      <div className="text-white font-medium mb-1">Save Analysis History</div>
+                      <div className="text-sm text-slate-400">Store analyzed URLs, screenshots, and email checks on this device.</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={settings.save_analysis_history ?? true}
+                        onChange={(e) => updateSetting('save_analysis_history', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-emerald-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start justify-between p-4 bg-slate-800/30 rounded-lg">
+                    <div className="flex-1 pr-4">
+                      <div className="text-white font-medium mb-1">Retention Window</div>
+                      <div className="text-sm text-slate-400">Automatically discard older analysis history after this many days.</div>
+                    </div>
+                    <select
+                      value={settings.retention_days ?? 90}
+                      onChange={(e) => updateSetting('retention_days', Number(e.target.value) as 7 | 30 | 90 | 365)}
+                      className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
+                    >
+                      <option value={7}>7 days</option>
+                      <option value={30}>30 days</option>
+                      <option value={90}>90 days</option>
+                      <option value={365}>1 year</option>
+                    </select>
+                  </div>
+
+                  <div className="p-4 bg-slate-800/20 rounded-lg border border-slate-700/50">
+                    <div className="text-white font-medium mb-1">Clear Analysis History</div>
+                    <div className="text-sm text-slate-400 mb-3">Remove all locally stored analysis records without touching your account.</div>
+                    <Button variant="secondary" onClick={clearLocalAnalyses}>
+                      Clear Local History
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Danger zone */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-orange-400" />
+                  Account Actions
+                </h3>
+                <div className="space-y-4">
                   <div className="p-4 bg-orange-500/10 border border-orange-500/30 rounded-lg">
                     <div className="flex items-start gap-3 mb-3">
-                      <RotateCcw className="w-5 h-5 text-orange-400 mt-1" />
+                      <RotateCcw className="w-5 h-5 text-orange-400 mt-0.5" />
                       <div>
-                        <div className="text-white font-medium mb-1">Reset Settings</div>
-                        <div className="text-sm text-slate-400">Restore defaults</div>
+                        <div className="text-white font-medium mb-0.5">Reset Settings</div>
+                        <div className="text-sm text-slate-400">Restore all preferences to factory defaults</div>
                       </div>
                     </div>
                     <Button onClick={resetSettings} variant="secondary" fullWidth>
@@ -1128,9 +1935,9 @@ export default function SettingsPage() {
 
                   <div className="p-4 bg-slate-800/60 border border-slate-700 rounded-lg">
                     <div className="flex items-start gap-3 mb-3">
-                      <LogOut className="w-5 h-5 text-slate-300 mt-1" />
+                      <LogOut className="w-5 h-5 text-slate-300 mt-0.5" />
                       <div>
-                        <div className="text-white font-medium mb-1">Log Out</div>
+                        <div className="text-white font-medium mb-0.5">Log Out</div>
                         <div className="text-sm text-slate-400">Sign out of this device</div>
                       </div>
                     </div>
@@ -1141,11 +1948,16 @@ export default function SettingsPage() {
 
                   <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
                     <div className="flex items-start gap-3 mb-3">
-                      <Trash2 className="w-5 h-5 text-red-400 mt-1" />
+                      <Trash2 className="w-5 h-5 text-red-400 mt-0.5" />
                       <div>
-                        <div className="text-white font-medium mb-1">Delete All Data</div>
-                        <div className="text-sm text-slate-400">Permanently remove all data</div>
+                        <div className="text-white font-medium mb-0.5">Delete All Data</div>
+                        <div className="text-sm text-slate-400">Permanently wipe all local progress, settings, and analyses</div>
                       </div>
+                    </div>
+                    <div className="mb-3">
+                      <Alert variant="warning">
+                        ⚠️ This action is irreversible. Export your data first.
+                      </Alert>
                     </div>
                     <Button
                       onClick={() => {
@@ -1163,16 +1975,44 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Alert variant="warning">
-              ⚠️ Data deletion is permanent. Export first if needed.
-            </Alert>
+            {/* About */}
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Info className="w-5 h-5 text-slate-400" />
+                  About PhishGuard Academy
+                </h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
+                    <span className="text-slate-400">Application</span>
+                    <span className="text-white font-medium">PhishGuard Academy</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
+                    <span className="text-slate-400">Version</span>
+                    <span className="text-slate-300 font-mono text-xs">2.0.0</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
+                    <span className="text-slate-400">ML Model</span>
+                    <span className="text-slate-300 text-xs">Ensemble v2 — 95.2% accuracy</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
+                    <span className="text-slate-400">Purpose</span>
+                    <span className="text-slate-300 text-xs">Anti-phishing education &amp; detection</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-700/50">
+                    Built as part of a dissertation project at the University of Plymouth.
+                    Not for commercial use.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
         
         {showToast && (
           <Toast
             message={toastMessage}
-            type="success"
+            type={toastType}
             onClose={() => setShowToast(false)}
           />
         )}
@@ -1194,14 +2034,14 @@ export function LevelUpModal() {
   const [levelUpData, setLevelUpData] = useState<LevelUpData | null>(null)
 
   useEffect(() => {
-    const handleLevelUp = (event: Event) => {
+        const handleLevelUp = (event: Event) => {
       const customEvent = event as CustomEvent
       const data = customEvent.detail as LevelUpData
       setLevelUpData(data)
       setIsOpen(true)
 
       // Auto-close after 5 seconds
-      const timer = setTimeout(() => {
+            const timer = setTimeout(() => {
         setIsOpen(false)
       }, 5000)
 

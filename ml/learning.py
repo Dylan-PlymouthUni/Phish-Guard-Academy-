@@ -1,3 +1,6 @@
+"""Learning utilities for PhishGuard Academy.
+This module defines the core learning components of the PhishGuard Academy platform, including the lessons, challenges, and achievements that users can engage with to improve their phishing detection skills."""
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -5,6 +8,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 class Achievement(BaseModel):
+    """Schema for Achievement data."""
     id: str
     title: str
     description: str
@@ -13,6 +17,7 @@ class Achievement(BaseModel):
     unlocked: bool = False
 
 class UserProgress(BaseModel):
+    """Schema for UserProgress data."""
     total_points: int = 0
     lessons_completed: int = 0
     challenges_passed: int = 0

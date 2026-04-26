@@ -1,3 +1,13 @@
+/**
+ * ComparisonView component/module file.
+ * This file defines the ComparisonView component, which is used to display a side-by-side comparison of legitimate and suspicious indicators in the PhishGuard Academy application. The component visually distinguishes between the two categories using color coding and icons, making it easier for users to understand the differences at a glance.
+ * It includes the following responsibilities:
+ * - Accepting props for legitimate and suspicious indicators, each with a title and a list of indicators.
+ * - Rendering two distinct sections for legitimate and suspicious indicators, styled with different colors and icons.
+ * - Displaying each indicator in a clear and organized manner, using checkmarks for legitimate indicators and crosses for suspicious ones.
+ * The ComparisonView component is designed to help users quickly identify key differences between safe and potentially harmful elements, enhancing their learning experience in the PhishGuard Academy.
+ */
+
 import { CheckCircle, AlertCircle } from 'lucide-react'
 
 interface ComparisonViewProps {

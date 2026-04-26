@@ -1,4 +1,10 @@
-import { Target, Clock, Trophy, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+/**
+ * Challenges component/module file.
+  * This file defines the Challenges page, which allows users to test their phishing detection skills by completing various challenges. 
+  * Each challenge consists of multiple questions related to identifying phishing indicators in URLs, emails, and other scenarios. Users can earn points based on their performance and track their progress over time.
+ */
+
+import { Target, Clock, Trophy, CheckCircle, XCircle, AlertTriangle, Lightbulb, RotateCcw } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
 import { Card, CardContent } from '../components/ui/Card'
@@ -68,6 +74,8 @@ export default function Challenges() {
   const [result, setResult] = useState<any>(null)
   const [timeLeft, setTimeLeft] = useState(0)
   const [started, setStarted] = useState(false)
+  const [practiceMode, setPracticeMode] = useState(false)
+  const [pendingAnswer, setPendingAnswer] = useState<{ questionId: string; answer: string } | null>(null)
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
@@ -76,28 +84,44 @@ export default function Challenges() {
 
   useEffect(() => {
     if (!started || !selectedChallenge || timeLeft <= 0) return
-    const timer = setInterval(() => setTimeLeft(t => t - 1), 1000)
+        const timer = setInterval(() => setTimeLeft(t => t - 1), 1000)
     return () => clearInterval(timer)
   }, [started, selectedChallenge, timeLeft])
 
-  const startChallenge = (challenge: Challenge) => {
+  useEffect(() => {
+    if (!started || !selectedChallenge || submitted || timeLeft > 0) return
+    submitChallenge()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, started, selectedChallenge, submitted])
+
+    const startChallenge = (challenge: Challenge, options?: { practiceMode?: boolean }) => {
     setSelectedChallenge(challenge)
     setAnswers({})
+    setPendingAnswer(null)
     setSubmitted(false)
     setResult(null)
     setActiveQuestion(0)
     setTimeLeft(challenge.time_limit)
+    setPracticeMode(Boolean(options?.practiceMode))
     setStarted(true)
   }
 
-  const handleAnswer = (questionId: string, answer: string) => {
-    setAnswers(prev => ({ ...prev, [questionId]: answer }))
+    const handleAnswer = (questionId: string, answer: string) => {
+    setAnswers(prev => {
+      if (prev[questionId]) return prev
+      return { ...prev, [questionId]: answer }
+    })
   }
 
-  const submitChallenge = async () => {
+    const queueAnswer = (questionId: string, answer: string) => {
+    if (answers[questionId]) return
+    setPendingAnswer({ questionId, answer })
+  }
+
+    const submitChallenge = async () => {
     if (!selectedChallenge) return
 
-    const locallyGrade = () => {
+        const locallyGrade = () => {
       const total = selectedChallenge.questions.length
       let correct = 0
       selectedChallenge.questions.forEach(q => {
@@ -107,6 +131,15 @@ export default function Challenges() {
       const passed = score >= 70
       const points_earned = passed ? selectedChallenge.points : 0
       return { passed, score, correct, total, points_earned }
+    }
+
+    if (practiceMode) {
+      const data = locallyGrade()
+      setResult({ ...data, points_earned: 0, practice_mode: true })
+      setSubmitted(true)
+      setToastMessage('Practice round complete. Review what you missed and try again.')
+      setShowToast(true)
+      return
     }
 
     try {
@@ -150,7 +183,7 @@ export default function Challenges() {
     setShowToast(true)
   }
 
-  const formatTime = (seconds: number) => {
+    const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, '0')}`
@@ -174,6 +207,12 @@ export default function Challenges() {
   if (selectedChallenge && !submitted) {
     const question = selectedChallenge.questions[activeQuestion]
     const progress = ((activeQuestion + 1) / selectedChallenge.questions.length) * 100
+    const selectedAnswer = answers[question.id]
+    const pendingForCurrent = pendingAnswer?.questionId === question.id ? pendingAnswer.answer : null
+    const hasAnswered = Boolean(selectedAnswer)
+    const hasGroundTruth = Boolean(question.correct_answer)
+    const isCorrect = hasGroundTruth && selectedAnswer === question.correct_answer
+        const unansweredCount = selectedChallenge.questions.filter(q => !answers[q.id]).length
 
     return (
       <MainLayout>
@@ -205,18 +244,27 @@ export default function Challenges() {
                 {question.options.map((option, idx) => (
                   <label
                     key={idx}
-                    className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition ${
-                      answers[question.id] === option
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-slate-600 hover:border-slate-500 bg-slate-900/30'
-                    }`}
+                    className={`flex items-center p-4 rounded-lg border-2 transition ${
+                      hasAnswered && hasGroundTruth
+                        ? option === question.correct_answer
+                          ? 'border-green-500 bg-green-500/10'
+                          : selectedAnswer === option
+                            ? 'border-red-500 bg-red-500/10'
+                            : 'border-slate-600 bg-slate-900/30'
+                        : selectedAnswer === option
+                          ? 'border-blue-500 bg-blue-500/10'
+                          : pendingForCurrent === option
+                            ? 'border-amber-500 bg-amber-500/10'
+                          : 'border-slate-600 hover:border-slate-500 bg-slate-900/30'
+                    } ${hasAnswered ? 'cursor-not-allowed opacity-95' : 'cursor-pointer'}`}
                   >
                     <input
                       type="radio"
                       name={question.id}
                       value={option}
-                      checked={answers[question.id] === option}
-                      onChange={() => handleAnswer(question.id, option)}
+                      checked={answers[question.id] === option || pendingForCurrent === option}
+                      onChange={() => queueAnswer(question.id, option)}
+                      disabled={hasAnswered}
                       className="w-4 h-4 mr-3 flex-shrink-0"
                     />
                     <span className="text-white text-left flex-1">{option}</span>
@@ -224,9 +272,77 @@ export default function Challenges() {
                 ))}
               </div>
 
+              {!hasAnswered && pendingForCurrent && (
+                <div className="mb-8 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+                  <p className="text-sm text-amber-100 mb-3">
+                    Confirm this answer to lock it in. If you want a different option, click it before confirming.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="success"
+                      size="sm"
+                      onClick={() => {
+                        handleAnswer(question.id, pendingForCurrent)
+                        setPendingAnswer(null)
+                      }}
+                    >
+                      Confirm Answer
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {hasAnswered && (
+                <div
+                  className={`mb-8 rounded-lg border p-4 ${
+                    !hasGroundTruth
+                      ? 'border-blue-500/30 bg-blue-500/10'
+                      : isCorrect
+                        ? 'border-green-500/30 bg-green-500/10'
+                        : 'border-amber-500/30 bg-amber-500/10'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-semibold mb-2">
+                    {!hasGroundTruth ? (
+                      <>
+                        <Lightbulb className="w-4 h-4 text-blue-300" />
+                        <span className="text-blue-200">Answer recorded</span>
+                      </>
+                    ) : isCorrect ? (
+                      <>
+                        <CheckCircle className="w-4 h-4 text-green-300" />
+                        <span className="text-green-200">Correct - great catch</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-4 h-4 text-amber-300" />
+                        <span className="text-amber-200">Not quite - here is what to look for</span>
+                      </>
+                    )}
+                  </div>
+
+                  {hasGroundTruth && !isCorrect && question.correct_answer && (
+                    <p className="text-sm text-amber-100 mb-2">
+                      Correct answer: <span className="font-semibold">{question.correct_answer}</span>
+                    </p>
+                  )}
+
+                  {question.explanation && (
+                    <p className="text-sm text-slate-100 leading-relaxed">{question.explanation}</p>
+                  )}
+
+                  <p className="text-xs text-slate-300 mt-3">
+                    Answer locked for this question. Use the review screen to learn from mistakes.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <Button
-                  onClick={() => setActiveQuestion(Math.max(0, activeQuestion - 1))}
+                  onClick={() => {
+                    setPendingAnswer(null)
+                    setActiveQuestion(Math.max(0, activeQuestion - 1))
+                  }}
                   variant="secondary"
                   disabled={activeQuestion === 0}
                 >
@@ -234,18 +350,28 @@ export default function Challenges() {
                 </Button>
 
                 {activeQuestion === selectedChallenge.questions.length - 1 ? (
-                  <Button onClick={submitChallenge} variant="success">
+                  <Button onClick={submitChallenge} variant="success" disabled={unansweredCount > 0}>
                     Submit Challenge
                   </Button>
                 ) : (
                   <Button
-                    onClick={() => setActiveQuestion(activeQuestion + 1)}
+                    onClick={() => {
+                      setPendingAnswer(null)
+                      setActiveQuestion(activeQuestion + 1)
+                    }}
                     variant="primary"
+                    disabled={!hasAnswered}
                   >
                     Next
                   </Button>
                 )}
               </div>
+
+              {unansweredCount > 0 && (
+                <p className="text-xs text-slate-400 mt-4">
+                  {unansweredCount} question{unansweredCount === 1 ? '' : 's'} remaining before submit.
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -255,11 +381,15 @@ export default function Challenges() {
 
   // Challenge submitted
   if (submitted && result) {
+    const missedQuestions = selectedChallenge?.questions.filter(
+      q => q.correct_answer && answers[q.id] !== q.correct_answer
+    ) || []
+
     return (
       <MainLayout>
-        <div className="max-w-4xl mx-auto px-4 py-12 text-center">
+        <div className="max-w-4xl mx-auto px-4 py-12">
           <div
-            className={`mb-8 p-12 rounded-lg border-2 backdrop-blur-xl ${
+            className={`mb-8 p-12 rounded-lg border-2 backdrop-blur-xl text-center ${
               result.passed
                 ? 'bg-green-500/10 border-green-500/30'
                 : 'bg-red-500/10 border-red-500/30'
@@ -269,7 +399,7 @@ export default function Challenges() {
               {result.passed ? <Trophy className="w-16 h-16 mx-auto text-green-400" /> : <XCircle className="w-16 h-16 mx-auto text-red-400" />}
             </div>
             <h1 className={`text-4xl font-bold mb-2 ${result.passed ? 'text-green-400' : 'text-red-400'}`}>
-              {result.passed ? 'Challenge Passed' : 'Keep Trying'}
+              {result.practice_mode ? 'Practice Review' : result.passed ? 'Challenge Passed' : 'Keep Trying'}
             </h1>
             <p className={`text-2xl font-bold mb-6 ${result.passed ? 'text-green-300' : 'text-red-300'}`}>
               {result.score}%
@@ -297,7 +427,73 @@ export default function Challenges() {
                 Retry Challenge
               </Button>
             )}
+            {missedQuestions.length > 0 && (
+              <Button
+                onClick={() => {
+                  if (!selectedChallenge) return
+                  startChallenge(
+                    {
+                      ...selectedChallenge,
+                      id: `${selectedChallenge.id}-retry`,
+                      title: `${selectedChallenge.title} (Missed Questions)`,
+                      description: 'Practice only the questions you missed.',
+                      questions: missedQuestions,
+                    },
+                    { practiceMode: true }
+                  )
+                }}
+                variant="secondary"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Retry Missed
+              </Button>
+            )}
           </div>
+
+          <Card>
+            <CardContent>
+              <h2 className="text-2xl font-bold text-white mb-2">Answer Review</h2>
+              <p className="text-slate-400 mb-6">See what was correct, what was missed, and why.</p>
+
+              <div className="space-y-4">
+                {selectedChallenge?.questions.map((q, idx) => {
+                  const chosen = answers[q.id]
+                  const hasGroundTruth = Boolean(q.correct_answer)
+                  const correct = hasGroundTruth && chosen === q.correct_answer
+
+                  return (
+                    <div
+                      key={q.id}
+                      className={`rounded-lg border p-4 ${
+                        !hasGroundTruth
+                          ? 'border-blue-500/30 bg-blue-500/5'
+                          : correct
+                            ? 'border-green-500/30 bg-green-500/5'
+                            : 'border-red-500/30 bg-red-500/5'
+                      }`}
+                    >
+                      <p className="text-xs text-slate-400 mb-2">Question {idx + 1}</p>
+                      <p className="text-white font-semibold mb-3">{q.question}</p>
+
+                      <p className="text-sm text-slate-300 mb-1">
+                        Your answer: <span className="font-semibold text-slate-100">{chosen || 'No answer'}</span>
+                      </p>
+
+                      {q.correct_answer && (
+                        <p className="text-sm text-slate-300 mb-2">
+                          Correct answer: <span className="font-semibold text-green-300">{q.correct_answer}</span>
+                        </p>
+                      )}
+
+                      {q.explanation && (
+                        <p className="text-sm text-slate-200 leading-relaxed">{q.explanation}</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </MainLayout>
     )

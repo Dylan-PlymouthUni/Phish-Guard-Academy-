@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
-⚠️  LEGACY/EXPERIMENTAL — not used for dissertation results.
+ LEGACY/EXPERIMENTAL — not used for dissertation results.
 Use scripts/run_experiment.py for reproducible dissertation results.
 
 Complete ML Training Pipeline
 Runs all training steps in sequence
+1. Collect real phishing data
+2. Train URL model on real data
+This script orchestrates the entire training pipeline for the PhishGuard Academy project, ensuring that all necessary steps are executed in the correct order. It provides clear logging and error handling to facilitate debugging and
+monitoring of the training process. The script is designed to be run from the command line and will execute each step of the pipeline, including data collection and model training, while providing informative output about the progress and any issues encountered along the way.
 """
 import sys
 import subprocess
@@ -35,10 +39,11 @@ def run_script(script_name: str, description: str):
 
 
 def main():
+    """Run the main CLI workflow for this module."""
     print("""
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║     🎓 Phish Guard ML Complete Training Pipeline         ║
+║      Phish Guard ML Complete Training Pipeline         ║
 ║                                                           ║
 ║  This will collect real phishing data and train models   ║
 ║                                                           ║
@@ -61,19 +66,19 @@ def main():
     print("""
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║        ✅ COMPLETE TRAINING PIPELINE FINISHED! 🎉         ║
+║        COMPLETE TRAINING PIPELINE FINISHED!              ║
 ║                                                           ║
 ║  All models have been trained on real phishing data!     ║
 ║                                                           ║
-║  📊 What was trained:                                    ║
+║  What was trained:                                    ║
 ║     • URL model (61 features, Random Forest)             ║
 ║                                                           ║
-║  💡 Next steps:                                          ║
+║   Next steps:                                          ║
 ║     1. Restart API: python -m uvicorn server.app:app     ║
 ║     2. Test improvements: python test_api_ml.py          ║
 ║     3. Check model performance in logs                   ║
 ║                                                           ║
-║  🎯 Expected accuracy: 95%+                              ║
+║   Expected accuracy: 95%+                              ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
     """)

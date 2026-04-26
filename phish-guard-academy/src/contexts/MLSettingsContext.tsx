@@ -1,3 +1,9 @@
+/**
+ * MLSettingsContext component/module file.
+  * This file defines the MLSettingsContext, which provides a way to manage machine learning-related settings (such as sensitivity, whitelist, auto-analyze, and confidence display) in the PhishGuard Academy application.
+  *  It allows components to access and update these settings, as well as check if a URL is whitelisted or get the current sensitivity threshold for phishing detection.
+ */
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { getSettings, saveSettings as saveToStorage } from '../utils/storage'
 
@@ -35,13 +41,13 @@ export function MLSettingsProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const updateSettings = (updates: Partial<MLSettings>) => {
+    const updateSettings = (updates: Partial<MLSettings>) => {
     const newSettings = { ...settings, ...updates }
     setSettings(newSettings)
     saveToStorage(newSettings)
   }
 
-  const isWhitelisted = (url: string): boolean => {
+    const isWhitelisted = (url: string): boolean => {
     try {
       const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`)
       const hostname = urlObj.hostname
@@ -53,7 +59,7 @@ export function MLSettingsProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const getSensitivityThreshold = (): number => {
+    const getSensitivityThreshold = (): number => {
     switch (settings.ml_sensitivity) {
       case 'strict':
         return 0.5  // Flag if risk > 50%

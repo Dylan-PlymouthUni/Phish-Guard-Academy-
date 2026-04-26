@@ -1,3 +1,7 @@
+/**
+ * Service worker script for offline caching and asset control.
+ */
+
 const CACHE_NAME = 'phishguard-v1'
 const urlsToCache = [
   '/app/',

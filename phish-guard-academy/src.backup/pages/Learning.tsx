@@ -1,3 +1,11 @@
+/**
+ * Learning component/module file.
+  * This file defines the Learning page component for the PhishGuard Academy application. 
+  * The Learning page provides users with a structured learning experience to master phishing detection skills. 
+  * It includes a list of lessons, each with a title, description, difficulty level, duration, and points reward. 
+  * Users can click on a lesson to view its content and mark it as complete to earn points.
+ */
+
 import { BookOpen, Trophy, Clock, Zap, Target, Lock, Eye, Award, ChevronRight, Play } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -39,7 +47,7 @@ export default function Learning() {
     fetchData()
   }, [])
 
-  const fetchData = async () => {
+    const fetchData = async () => {
     try {
       const [progressRes, lessonsRes] = await Promise.all([
         fetch('/api/progress'),
@@ -59,7 +67,7 @@ export default function Learning() {
     return <div className="w-full h-screen flex items-center justify-center"><p className="text-white">Loading...</p></div>
   }
 
-  const getDifficultyColor = (diff: string) => {
+    const getDifficultyColor = (diff: string) => {
     switch(diff) {
       case 'beginner': return 'text-green-400 bg-green-500/10'
       case 'intermediate': return 'text-orange-400 bg-orange-500/10'

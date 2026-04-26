@@ -2,7 +2,9 @@
   "scripts": {
     "dev": "npm run dev:frontend",
     "dev:frontend": "npm --prefix phish-guard-academy run dev -- --host 0.0.0.0 --port 5173",
-    "dev:backend": "python3 -m uvicorn server.app:app --host 0.0.0.0 --port 8000 --reload"
+    "dev:backend": "python3 -m uvicorn server.app:app --host 0.0.0.0 --port 8000 --reload",
+    "qol:run": "python3 scripts/qol_run.py --seed 42",
+    "qol:smoke": "python3 scripts/smoke_api.py --base-url http://localhost:8000"
   },
   "dependencies": {
     "framer-motion": "^12.23.24",

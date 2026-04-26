@@ -1,6 +1,10 @@
 """
 Threat Intelligence Integration
 Real-time phishing detection using multiple threat intelligence feeds
++This module defines the ThreatIntelligence class, which integrates with multiple threat intelligence sources such as PhishTank and URLhaus to provide real-time phishing detection for URLs.
+ The class includes methods to check URLs against these databases, assess domain reputation, and aggregate results into a comprehensive threat assessment. 
+ It also implements caching to reduce redundant API calls and improve performance.
+ The module is designed to be used by the API endpoints to provide enhanced phishing detection capabilities based on external threat intelligence data.
 """
 import requests
 import logging
@@ -14,6 +18,7 @@ class ThreatIntelligence:
     """Integration with multiple threat intelligence sources"""
     
     def __init__(self):
+        """Set up an in-memory cache to reduce repeat calls to external feeds."""
         # Cache results for 5 minutes to avoid excessive API calls
         self.cache: Dict[str, Dict] = {}
         self.cache_duration = timedelta(minutes=5)

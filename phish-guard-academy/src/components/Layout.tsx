@@ -1,3 +1,11 @@
+/**
+ * Layout component/module file.
+  * This file defines the Layout component which serves as the main structure for the PhishGuard Academy application. 
+  * It includes a responsive navigation bar with links to different sections of the app, a main content area where child components are rendered, and a footer with additional links and information. 
+  * The navigation bar adapts to different screen sizes, providing a mobile-friendly menu toggle. 
+  * The layout ensures a consistent look and feel across all pages of the application while allowing for dynamic content rendering in the main area.
+ */
+
 import { Shield, Menu, X, Zap, BookOpen, Award, BarChart3, History, Settings, LayoutDashboard } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useState } from 'react'
@@ -16,7 +24,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { path: '/settings', label: 'Settings', icon: Settings },
   ]
 
-  const isActive = (path: string) => location.pathname === path
+    const isActive = (path: string) => location.pathname === path
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex flex-col">

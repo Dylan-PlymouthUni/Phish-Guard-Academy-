@@ -1,6 +1,8 @@
 """
 Advanced URL Feature Extractor for Phishing Detection
 Implements 30+ sophisticated features beyond basic heuristics
+This module defines the AdvancedURLAnalyzer class, which provides methods to extract a comprehensive set of features from URLs for use in machine learning models for phishing detection. 
+The features include various aspects of the URL structure, domain characteristics, SSL/TLS certificate information, DNS records, WHOIS data, content analysis (if the page can be fetched), and redirect chain analysis.
 """
 from __future__ import annotations
 
@@ -30,6 +32,7 @@ class AdvancedURLAnalyzer:
     """Extract comprehensive features from URLs for ML models"""
     
     def __init__(self, timeout: int = 1):  # Reduced for speed
+        """Initialize class state and store required dependencies."""
         self.timeout = timeout
         self.session = requests.Session()
         self.session.headers.update({

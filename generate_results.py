@@ -1,3 +1,11 @@
+"""Generate prediction outputs for the URL model test split.
+This script loads the trained URL phishing detection model, applies it to the test set of URLs, and generates a CSV file containing the original URLs, true labels, predicted probabilities, and predicted classes.
+The script uses the AdvancedURLAnalyzer to extract features from each URL, builds the feature vector according to the model's expected input, and handles any exceptions that may arise during feature extraction or prediction.
+The resulting CSV file (results.csv) is used for further analysis and evaluation of the model's performance, including the computation of metrics and the generation of ensemble predictions.
+The script also allows for an environment variable (PHISHGUARD_URL_THRESHOLD) to adjust the classification threshold for determining whether a URL is classified as phishing or legitimate based on the predicted probability. 
+This provides flexibility in tuning the model's sensitivity and specificity according to the desired use case. 
+"""
+
 # generate_results.py
 import os
 import sys
@@ -18,7 +26,18 @@ YTRUE_COL = "y_true"  # or use 'label' if that's the name in the test CSV
 THRESHOLD = 0.5
 # ---------------------------------
 
+
+def get_threshold() -> float:
+	"""Return URL classification threshold with env override."""
+	raw = os.getenv("PHISHGUARD_URL_THRESHOLD", "0.76")
+	try:
+		value = float(raw)
+	except ValueError:
+		value = 0.76
+	return min(0.99, max(0.01, value))
+
 def load_model(path):
+	"""Load model artifact and optional feature-name bundle from disk."""
 	m = joblib.load(path)
 	if isinstance(m, dict) and 'model' in m and 'feature_names' in m:
 		model = m['model']
@@ -29,9 +48,14 @@ def load_model(path):
 	return model, feature_names
 
 def build_feature_vector_from_features(features, feature_names):
+	"""Build ordered numeric feature vector matching model training columns."""
 	return [features.get(name, 0) for name in feature_names]
 
 def main():
+	"""Run end-to-end scoring and write the results CSV used for evaluation."""
+	threshold = get_threshold()
+	print(f"Using URL threshold: {threshold:.2f}")
+
 	if not Path(MODEL_PATH).exists():
 		print(f"Model not found at {MODEL_PATH}.")
 		sys.exit(1)
@@ -60,7 +84,7 @@ def main():
 		feature_vector = [float(v) if isinstance(v,(int, float, bool)) else 0.0 for v in feature_vector]
 		try:
 			proba = model.predict_proba([feature_vector])[0][1]
-			pred = 1 if proba >= THRESHOLD else 0
+			pred = 1 if proba >= threshold else 0
 		except Exception as e:
 			proba = None
 			pred = None

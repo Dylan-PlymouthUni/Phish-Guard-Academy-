@@ -1,3 +1,10 @@
+/**
+ * Achievements component/module file.
+  * This file defines the Achievements page, which displays a list of achievements that users can unlock by completing various milestones in the PhishGuard Academy application. 
+  * It fetches achievement data from the backend API and also builds local achievements based on user analytics stored in local storage. 
+  * The page includes filtering options to view all, unlocked, or locked achievements, and shows overall progress and points earned.
+ */
+
 import { Award, Lock, Star, Zap, TrendingUp } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
@@ -23,7 +30,7 @@ export default function Achievements() {
   const { token } = useAuth()
   const API_URL = (import.meta as any)?.env?.VITE_API_URL ?? ''
 
-  const buildLocalAchievements = (): AchievementItem[] => {
+    const buildLocalAchievements = (): AchievementItem[] => {
     const analytics = getAnalytics()
     return [
       {
@@ -67,10 +74,10 @@ export default function Achievements() {
 
   // Refresh achievements when page becomes visible or receives focus
   useEffect(() => {
-    const handleVisibilityChange = () => {
+        const handleVisibilityChange = () => {
       if (!document.hidden) loadAchievements()
     }
-    const handleFocus = () => loadAchievements()
+        const handleFocus = () => loadAchievements()
     
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleFocus)
@@ -81,7 +88,7 @@ export default function Achievements() {
     }
   }, [])
 
-  const loadAchievements = async () => {
+    const loadAchievements = async () => {
     try {
       if (!token) {
         setAchievements(buildLocalAchievements())
@@ -104,13 +111,13 @@ export default function Achievements() {
     }
   }
 
-  const filtered = achievements.filter(a => {
+    const filtered = achievements.filter(a => {
     if (filter === 'unlocked') return a.unlocked
     if (filter === 'locked') return !a.unlocked
     return true
   })
 
-  const unlockedCount = achievements.filter(a => a.unlocked).length
+    const unlockedCount = achievements.filter(a => a.unlocked).length
   const totalPoints = achievements
     .filter(a => a.unlocked)
     .reduce((sum, a) => sum + a.points, 0)

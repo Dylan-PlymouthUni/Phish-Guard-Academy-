@@ -1,5 +1,9 @@
 """
 Leaderboard API endpoints for PhishGuard Academy
+This module defines the API endpoints related to the leaderboard functionality of the PhishGuard Academy platform. 
+It includes endpoints to retrieve the global leaderboard, which ranks users based on their XP and other stats, as well as an endpoint to get a specific user's rank and stats.
+ The leaderboard data is fetched from the database, and the endpoints are protected with authentication to ensure that only authorized users can access this information. 
+ The module also integrates with the achievements system to provide additional context about users' progress and accomplishments on the platform.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -14,6 +18,7 @@ router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 
 
 class LeaderboardEntryResponse(BaseModel):
+    """Schema for LeaderboardEntryResponse data."""
     rank: int
     user_id: str
     name: str

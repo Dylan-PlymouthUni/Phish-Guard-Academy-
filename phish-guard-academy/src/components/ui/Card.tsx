@@ -1,3 +1,8 @@
+/**
+ * Card component/module file.
+  * This file defines the Card component, which is a reusable UI component for displaying content in a card layout with optional hover effects.
+ */
+
 import React from 'react'
 
 interface CardProps {

@@ -1,3 +1,7 @@
+"""Challenges utilities for PhishGuard Academy.
+This module defines the challenges system for the PhishGuard Academy platform, including the challenge definitions and the logic to check when a user has unlocked new challenges based on their activity and progress within the platform.
+The CHALLENGES list contains the definitions of each challenge, including its ID, title, description, icon, points, and the condition that must be met for the challenge to be unlocked."""
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -375,17 +379,21 @@ CHALLENGES = [
 ATTEMPTS_FILE = Path("data/challenge_attempts.jsonl")
 
 def get_challenge(challenge_id: str) -> Optional[Dict[str, Any]]:
+    """Return one challenge definition by id, or None if not found."""
     return next((c for c in CHALLENGES if c["id"] == challenge_id), None)
 
 def get_all_challenges() -> List[Dict[str, Any]]:
+    """Return the complete in-memory challenge catalog."""
     return CHALLENGES
 
 def save_attempt(attempt: Dict[str, Any]) -> None:
+    """Append one challenge attempt to the JSONL attempts history file."""
     ATTEMPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(ATTEMPTS_FILE, 'a') as f:
         f.write(json.dumps(attempt, default=str) + '\n')
 
 def get_user_attempts() -> List[Dict[str, Any]]:
+    """Load and return all recorded challenge attempts from disk."""
     ATTEMPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not ATTEMPTS_FILE.exists():
         return []
@@ -400,6 +408,7 @@ def get_user_attempts() -> List[Dict[str, Any]]:
     return attempts
 
 def get_challenge_stats(challenge_id: str) -> Dict[str, Any]:
+    """Summarize attempt count, pass count, and best score for one challenge."""
     attempts = get_user_attempts()
     challenge_attempts = [a for a in attempts if a.get("challenge_id") == challenge_id]
     if not challenge_attempts:

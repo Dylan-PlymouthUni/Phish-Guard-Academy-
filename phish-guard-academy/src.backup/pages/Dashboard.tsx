@@ -1,3 +1,14 @@
+/**
+ * Dashboard component/module file.
+  * This file defines the Dashboard page component for the PhishGuard Academy application. The Dashboard provides users with an overview of their phishing detection activity, including key statistics such as total analyses, threats detected, legitimate items, and detection rate. It also includes a section for recent activity, which will display the user's latest analyses once they start using the application.
+  * The Dashboard component is responsible for:
+  * - Fetching and displaying real-time statistics related to the user's phishing detection activity.
+  * - Providing a visually appealing and user-friendly interface with appropriate use of colors, typography, and spacing.
+  * - Offering insights into the user's performance in detecting phishing threats through key metrics and recent activity.
+  * - Encouraging users to engage with the application by showing an empty state for recent activity until they start analyzing screenshots or emails.
+  * - Ensuring the overall user experience is informative and motivating for users to continue improving their phishing detection skills.
+ */
+
 import { BarChart3, TrendingUp, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 import { useState, useEffect } from 'react'
 

@@ -1,3 +1,8 @@
+/**
+ * History component/module file.
+  * This file defines the History page, which displays a list of past phishing analyses performed by the user in the PhishGuard Academy application.
+ */
+
 import { Clock, AlertCircle, CheckCircle, Trash2, Download, Filter } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
@@ -27,12 +32,12 @@ export default function History() {
     filterAnalyses()
   }, [analyses, filterStatus])
 
-  const fetchHistory = () => {
+    const fetchHistory = () => {
     const progress = getProgress()
     setAnalyses(progress.analyses_performed || [])
   }
 
-  const filterAnalyses = () => {
+    const filterAnalyses = () => {
     if (filterStatus === 'all') {
       setFiltered(analyses)
     } else if (filterStatus === 'high') {
@@ -44,13 +49,13 @@ export default function History() {
     }
   }
 
-  const deleteAnalysis = (id: string) => {
-    const updatedAnalyses = analyses.filter(a => a.id !== id)
+    const deleteAnalysis = (id: string) => {
+        const updatedAnalyses = analyses.filter(a => a.id !== id)
     setAnalyses(updatedAnalyses)
     saveProgress({ analyses_performed: updatedAnalyses as any })
   }
 
-  const exportHistory = () => {
+    const exportHistory = () => {
     const data = JSON.stringify(analyses, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
     const url = window.URL.createObjectURL(blob)
@@ -60,18 +65,18 @@ export default function History() {
     a.click()
   }
 
-  const getRiskColor = (risk: number) => {
+    const getRiskColor = (risk: number) => {
     if (risk >= 70) return 'text-red-400 bg-red-500/10 border-red-500/20'
     if (risk >= 40) return 'text-orange-400 bg-orange-500/10 border-orange-500/20'
     return 'text-green-400 bg-green-500/10 border-green-500/20'
   }
 
-  const getRiskIcon = (risk: number) => {
+    const getRiskIcon = (risk: number) => {
     if (risk >= 70) return <AlertCircle className="w-4 h-4" />
     return <CheckCircle className="w-4 h-4" />
   }
 
-  const getRiskLabel = (risk: number) => {
+    const getRiskLabel = (risk: number) => {
     if (risk >= 70) return 'High Risk'
     if (risk >= 40) return 'Medium Risk'
     return 'Safe'

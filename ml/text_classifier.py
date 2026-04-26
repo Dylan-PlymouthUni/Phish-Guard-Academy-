@@ -1,6 +1,8 @@
 """
 Deep Learning Text Classifier for Phishing Detection
 Uses BERT/DistilBERT for email and message analysis
+This module defines the TextPhishingClassifier class, which implements a deep learning-based text classifier for detecting phishing content in emails and messages.
+ The classifier can be trained using a BERT-based model or a simpler TF-IDF + Logistic Regression approach as a fallback.
 """
 from __future__ import annotations
 
@@ -42,6 +44,7 @@ class TextPhishingClassifier:
         model_name: str = "distilbert-base-uncased",
         use_gpu: bool = True
     ):
+        """Configure model loading strategy and runtime device (GPU/CPU)."""
         self.model_name = model_name
         if use_gpu and TRANSFORMERS_AVAILABLE and torch and torch.cuda.is_available():
             self.device = "cuda"
@@ -149,16 +152,20 @@ class TextPhishingClassifier:
         
         # Create dataset
         class PhishingDataset(torch.utils.data.Dataset):
+            """Tiny dataset wrapper used by HuggingFace Trainer."""
             def __init__(self, encodings, labels):
+                """Store tokenized tensors and their matching labels."""
                 self.encodings = encodings
                 self.labels = labels
             
             def __getitem__(self, idx):
+                """Return one encoded training sample by index."""
                 item = {key: val[idx] for key, val in self.encodings.items()}
                 item['labels'] = torch.tensor(self.labels[idx])
                 return item
             
             def __len__(self):
+                """Return the number of items managed by this object."""
                 return len(self.labels)
         
         train_dataset = PhishingDataset(train_encodings, train_labels)

@@ -1,0 +1,8 @@
+Subject: Action Required - Verify Account
+
+Dear Customer,
+
+We detected unusual activity on your account. Verify your details within 24 hours to avoid temporary suspension:
+https://secure-paypal-alerts.example.com/verify-account
+
+Support Team

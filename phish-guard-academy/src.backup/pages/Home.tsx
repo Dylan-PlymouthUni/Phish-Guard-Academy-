@@ -1,3 +1,15 @@
+/**
+ * Home component/module file.
+ * This file defines the Home page component for the PhishGuard Academy application. The Home page serves as the landing page for users, providing an overview of the application's features, benefits, and key statistics. It includes sections such as a hero banner, feature highlights, user benefits, and a call-to-action to encourage users to start using the application.
+ * The Home component is responsible for:
+ * - Displaying a visually appealing hero section that introduces the application and its value proposition.
+ * - Highlighting key features of the application with icons and descriptions.
+ * - Showcasing important statistics to build credibility and encourage user engagement.
+ * - Providing a clear call-to-action that directs users to start analyzing or learning more about phishing detection.
+ * - Ensuring a responsive design that looks great on both desktop and mobile devices.
+ * - Using appropriate colors, typography, and spacing to create an engaging user experience.
+ */
+
 import React from 'react';
 import { Shield, Zap, Users, TrendingUp, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';

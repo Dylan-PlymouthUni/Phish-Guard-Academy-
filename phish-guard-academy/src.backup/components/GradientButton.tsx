@@ -1,3 +1,14 @@
+/**
+ * GradientButton component/module file.
+ * This file defines a reusable GradientButton component for the PhishGuard Academy application. The GradientButton is a styled button that features a gradient background and can be customized with different variants (primary, success, danger) to indicate different actions or statuses. It also supports disabled state and additional class names for further customization.
+ * The component includes the following responsibilities:
+ * - Providing a visually appealing gradient background for buttons.
+ * - Allowing customization through variants to indicate different types of actions (e.g., primary, success, danger).
+ * - Supporting a disabled state that visually indicates when the button is not interactive.
+ * - Accepting additional class names for further styling flexibility.
+ * - Ensuring the component is reusable and can be easily integrated into various parts of the application where buttons are needed.
+ */
+
 import React from 'react';
 
 interface GradientButtonProps {

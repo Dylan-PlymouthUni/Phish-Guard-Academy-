@@ -5,6 +5,8 @@ Collect Real Phishing Data from Multiple Sources
 - OpenPhish feed
 - URLhaus (abuse.ch)
 - Legitimate URLs from Alexa/Tranco top sites
+This script collects real phishing URLs from multiple sources and saves them to files for training.
+It also collects a set of legitimate URLs to balance the dataset. The collected data is saved in a structured format for easy use in training ML models.
 """
 import sys
 import requests
@@ -27,6 +29,7 @@ class PhishingDataCollector:
     """Collect phishing and legitimate URLs from multiple sources"""
     
     def __init__(self):
+        """Initialize class state and store required dependencies."""
         self.phishing_urls = []
         self.legitimate_urls = []
         
@@ -251,6 +254,7 @@ class PhishingDataCollector:
 
 
 def main():
+    """Run the main CLI workflow for this module."""
     print("🎣 Phish Guard Data Collection Pipeline")
     print("=" * 60)
     

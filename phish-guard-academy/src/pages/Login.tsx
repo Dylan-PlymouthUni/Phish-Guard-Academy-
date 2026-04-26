@@ -1,3 +1,24 @@
+/**
+ * Login component/module file.
+ * This file defines the Login page, which allows users to log into their accounts in the PhishGuard Academy application. It includes a form for entering email and password, as well as handling multi-factor authentication (MFA) if required. The component manages form state, handles API calls for login and MFA verification, and provides feedback to the user through notifications and error messages.
+ * It includes the following responsibilities:
+ * - Managing form state for email, password, OTP, and backup code.
+ * - Handling form submission for login and MFA verification.
+ * - Displaying error messages and loading states.
+ * - Navigating to the dashboard upon successful login.
+ * - Providing a link to the registration page for new users.
+ * - Using the AuthContext for authentication-related functions and state.
+ * - Using the react-hot-toast library for user notifications.
+ * - Styling the component with Tailwind CSS for a modern and responsive design.
+ * - Ensuring accessibility and usability for all users.
+ * 
+ * The component is structured to provide a smooth and secure login experience, guiding users through the necessary steps while providing clear feedback on their actions.
+ * It also handles edge cases such as MFA requirements and provides options for users who may have trouble with their authenticator app by allowing backup codes.
+ * Overall, this component serves as the gateway for users to access the features and content of the PhishGuard Academy application while ensuring security and usability.
+ * 
+ 
+ */
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,7 +38,7 @@ export default function Login() {
   const { login, verifyMfa } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
@@ -43,7 +64,7 @@ export default function Login() {
     }
   };
 
-  const handleMfaSubmit = async (e: React.FormEvent) => {
+    const handleMfaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);

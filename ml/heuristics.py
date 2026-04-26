@@ -1,3 +1,8 @@
+"""Heuristics utilities for PhishGuard Academy.
+This module defines a heuristic scoring system for evaluating the risk of a given URL and associated text content based on common phishing indicators.
+The heuristic_score function analyzes the text for urgency, credential requests, and login language, while also examining the URL for suspicious domain extensions and obfuscation tactics.
+It provides a risk score, severity level, and detailed findings that explain the reasoning behind the score, allowing users to understand the potential risks in their content even without the use of machine learning models."""
+
 from __future__ import annotations
 
 from typing import Dict, List, Any
@@ -27,6 +32,7 @@ SUSPICIOUS_TLDS = [
 
 
 def heuristic_score(text: str, url: str) -> Dict[str, Any]:
+    """Run heuristic score."""
     text_l = (text or "").lower()
     url_l = (url or "").lower()
     domain = urlparse(url_l).netloc.lower() if url_l else ""

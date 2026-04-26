@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""Test script to verify gamification data persistence and retrieval"""
+"""Test script to verify gamification data persistence and retrieval
+This script performs a series of API calls to test the gamification features of the PhishGuard Academy platform.
+ It verifies that user registration, login, analysis submission, challenge completion, lesson completion, profile retrieval, analytics retrieval, leaderboard access, and achievement retrieval are all functioning correctly and that the data is being persisted as expected. 
+ The script prints out the results of each step for easy verification."""
 import requests
 import json
 
 API_URL = "http://localhost:8000"
 
 def test_workflow():
+    """Test workflow."""
     print("=== PhishGuard Academy Gamification Test ===\n")
     
     # 1. Register a test user

@@ -1,5 +1,9 @@
 """
 SQLAlchemy ORM models for PhishGuard Academy database
+This module defines the SQLAlchemy ORM models for the PhishGuard Academy database, including the user accounts, phishing analysis history, challenge attempts, lesson progress, and achievements.
+Each model includes fields relevant to its purpose, such as user information, analysis details, challenge scores, and achievement metadata. The models also define relationships between users and their associated analyses, challenges, and lessons.
+The database setup includes a connection to the specified database URL, and utility functions for initializing the database
+and obtaining a session for database operations. This module serves as the foundation for the persistence layer of the PhishGuard Academy platform, enabling secure storage and retrieval of user data and activity history.
 """
 from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, Text, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -38,6 +42,7 @@ class DBUser(Base):
     lesson_progress = relationship("DBLessonProgress", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
+        """Return a concise debug representation for this object."""
         return f"<DBUser {self.email}>"
 
 
@@ -63,6 +68,7 @@ class DBAnalysis(Base):
     user = relationship("DBUser", back_populates="analyses")
     
     def __repr__(self):
+        """Return a concise debug representation for this object."""
         return f"<DBAnalysis {self.id} - Risk: {self.risk_score}>"
 
 
@@ -89,6 +95,7 @@ class DBChallengeAttempt(Base):
     user = relationship("DBUser", back_populates="challenge_attempts")
     
     def __repr__(self):
+        """Return a concise debug representation for this object."""
         return f"<DBChallengeAttempt {self.challenge_id} - Score: {self.score}>"
 
 
@@ -110,6 +117,7 @@ class DBLessonProgress(Base):
     user = relationship("DBUser", back_populates="lesson_progress")
     
     def __repr__(self):
+        """Return a concise debug representation for this object."""
         return f"<DBLessonProgress {self.lesson_id} - {self.progress_percent}%>"
 
 
@@ -128,6 +136,7 @@ class DBAchievement(Base):
     unlocked_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     def __repr__(self):
+        """Return a concise debug representation for this object."""
         return f"<DBAchievement {self.achievement_id}>"
 
 

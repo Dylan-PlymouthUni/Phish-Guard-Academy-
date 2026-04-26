@@ -1,6 +1,8 @@
 """
 Simple in-memory user database (will be replaced with PostgreSQL)
 For now, this stores user data in memory with persistence to JSON file
+This is a lightweight implementation for demonstration purposes.
+ In production, this would be replaced with a robust database solution like PostgreSQL, along with proper ORM models and secure password handling.
 """
 import json
 import os
@@ -15,6 +17,7 @@ class UserDatabase:
     """In-memory user database with JSON persistence"""
     
     def __init__(self):
+        """Initialize class state and store required dependencies."""
         self.users: Dict[str, Dict[str, Any]] = {}
         self.load_from_file()
     
@@ -124,4 +127,7 @@ db = UserDatabase()
 
 # Convenience functions
 def update_user_mfa(email: str, **kwargs):
+    """Update user mfa and persist changes.
+
+Args: email, **kwargs."""
     return db.update_user_mfa(email, **kwargs)

@@ -2,6 +2,9 @@
 """
 Train URL Phishing Detection Model
 Uses Random Forest with advanced features from real phishing URLs
+This script trains a Random Forest model for URL phishing detection using a comprehensive set of features extracted from real phishing URLs.
+The training data is loaded from a CSV file containing URLs and their corresponding labels (phishing or legitimate). The script extracts features from each URL using the AdvancedURLAnalyzer, builds a feature matrix, and then trains a Random Forest classifier with hyperparameter tuning using GridSearchCV. 
+The trained model is evaluated on a validation set, and key metrics such as accuracy, precision, recall, F1-score, ROC-AUC, and average precision are reported. The script also generates a feature importance plot to visualize which features contribute most to the model's predictions. Finally, the trained model and its associated metadata are saved to disk for later use in generating predictions and evaluating performance.
 """
 import sys
 from pathlib import Path
@@ -32,6 +35,7 @@ class URLModelTrainer:
     """Train Random Forest model on URL features"""
     
     def __init__(self, dataset_path: Path):
+        """Initialize class state and store required dependencies."""
         self.dataset_path = dataset_path
         self.analyzer = AdvancedURLAnalyzer(timeout=3)
         self.model = None

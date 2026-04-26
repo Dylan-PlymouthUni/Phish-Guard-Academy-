@@ -1,5 +1,8 @@
 """
 Authentication API endpoints for PhishGuard Academy
+This module defines the API endpoints related to user authentication and profile management for the PhishGuard Academy platform. It includes endpoints for user registration, login (with optional MFA), profile retrieval and updates, XP management, token verification, and achievement status. 
+The endpoints are protected with JWT-based authentication and include rate limiting to prevent abuse. 
+The module also integrates with the behavior analysis system to log relevant user activities for security monitoring and personalized feedback.
 """
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from sqlalchemy.orm import Session
@@ -20,6 +23,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 class LoginResponse(BaseModel):
+    """Schema for LoginResponse data."""
     access_token: Optional[str] = None
     token_type: Optional[str] = None
     user_id: Optional[str] = None
@@ -29,6 +33,7 @@ class LoginResponse(BaseModel):
 
 
 class MFALoginRequest(BaseModel):
+    """Schema for MFALoginRequest data."""
     email: str
     token: str
     backup_code: Optional[str] = None

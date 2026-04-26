@@ -1,3 +1,8 @@
+/**
+ * Button component/module file.
+  * This file defines the Button component, which is a reusable UI component for rendering buttons with different variants (primary, secondary, danger, success) and sizes (sm, md, lg) in the PhishGuard Academy application.
+ */
+
 import React from 'react'
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

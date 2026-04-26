@@ -1,3 +1,12 @@
+/**
+ * Navigation component/module file.
+  * This file defines the Navigation component which is responsible for rendering the navigation bar of the PhishGuard Academy application. 
+  * The navigation bar includes links to different sections of the app, such as Dashboard, Analyze, Sandbox, Challenges, Learn, Leaderboard, Achievements, Analytics, and Settings. 
+  * It also features a responsive design that adapts to different screen sizes, providing a mobile-friendly menu toggle.
+  *  The component uses React Router's Link for navigation and highlights the active link based on the current URL path. 
+  * Additionally, it displays a greeting with the user's name when they are authenticated.
+ */
+
 import { Menu, X, Zap, BarChart3, BookOpen, Target, Settings, Shield, LayoutDashboard, Beaker, Trophy, Award } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
@@ -8,7 +17,7 @@ export default function Navigation() {
   const location = useLocation()
   const { user, isAuthenticated } = useAuth()
 
-  const isActive = (path: string) => location.pathname === path
+    const isActive = (path: string) => location.pathname === path
 
   const navLinks = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },

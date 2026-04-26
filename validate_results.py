@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""
-Final validation script - ensures all outputs are correct and complete
+"""Final validation script for dissertation artifacts and model outputs.
+
+This script checks that required files exist, dataset splits are consistent,
+and key result columns/accuracy thresholds look sane before reporting.
+The script provides a clear report of any issues found and a final verdict on whether the data is ready for analysis and reporting in the dissertation.
+It also summarizes key metrics that should be reported in the dissertation results section, such as dataset size and model accuracies.
 """
 import pandas as pd
 import json

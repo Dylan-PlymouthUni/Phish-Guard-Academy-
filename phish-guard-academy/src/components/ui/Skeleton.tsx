@@ -1,3 +1,8 @@
+/**
+ * Skeleton component/module file.
+  * This file defines the Skeleton component, which is a reusable UI component for displaying loading placeholders in the PhishGuard Academy application.
+ */
+
 import React from 'react'
 import { motion } from 'framer-motion'
 

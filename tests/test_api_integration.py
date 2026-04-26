@@ -279,6 +279,11 @@ def test_analyze_concurrent_requests(api_base_url, sample_legitimate_urls):
     import concurrent.futures
     
     def make_request(url):
+        """Run make request.
+        Args:
+            url (str): URL to analyze.
+        Returns:
+            Tuple[int, dict]: Status code and response data."""
         response = requests.post(
             f"{api_base_url}/analyze",
             json={"url": url}

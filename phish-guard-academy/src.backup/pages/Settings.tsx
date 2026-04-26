@@ -1,3 +1,10 @@
+/**
+ * Settings component/module file.
+  * This file defines the Settings page component for the PhishGuard Academy application. 
+  * The Settings page allows users to customize their experience by adjusting various preferences related to appearance, learning, notifications, privacy, and data management. 
+  * The component is responsible for fetching the user's current settings from the backend API, allowing users to modify their settings through a user-friendly interface, and saving the updated settings back to the backend.
+ */
+
 import { Settings, Bell, Shield, Palette, Lock, HardDrive, RotateCcw, LogOut, AlertCircle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -21,7 +28,7 @@ export default function SettingsPage() {
     fetchSettings()
   }, [])
 
-  const fetchSettings = async () => {
+    const fetchSettings = async () => {
     try {
       setError(null)
       const res = await fetch('/api/settings')
@@ -39,7 +46,7 @@ export default function SettingsPage() {
     }
   }
 
-  const saveSettings = async () => {
+    const saveSettings = async () => {
     if (!settings) return
     try {
       const res = await fetch('/api/settings', {
@@ -58,13 +65,13 @@ export default function SettingsPage() {
     }
   }
 
-  const updateSetting = (key: keyof UserSettings, value: any) => {
+    const updateSetting = (key: keyof UserSettings, value: any) => {
     if (settings) {
       setSettings({ ...settings, [key]: value })
     }
   }
 
-  const resetSettings = () => {
+    const resetSettings = () => {
     if (confirm('Reset all settings to defaults?')) {
       fetch('/api/settings/reset', { method: 'POST' }).then(() => {
         fetchSettings()
@@ -74,7 +81,7 @@ export default function SettingsPage() {
     }
   }
 
-  const exportData = () => {
+    const exportData = () => {
     window.location.href = '/api/export-data'
   }
 

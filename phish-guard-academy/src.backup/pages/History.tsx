@@ -1,3 +1,23 @@
+/**
+ * History component/module file.
+  * This file defines the History page component for the PhishGuard Academy application. The History page allows users to view a list of their past phishing analyses, including details such as the type of analysis, risk percentage, status, and timestamps. Users can filter the history by status (threat, suspicious, safe), export their history as a JSON file, and delete individual analysis records.
+  * The History component is responsible for:
+  * - Fetching the user's analysis history from the backend API when the component mounts.
+  * - Displaying the history in a clear and organized manner, with visual indicators for the status of each analysis.
+  * - Providing filtering options to allow users to view specific types of analyses based on their status.
+  * - Allowing users to export their history as a JSON file for backup or further analysis.
+  * - Enabling users to delete individual analysis records from their history.
+  * - Ensuring a visually appealing and user-friendly interface with appropriate use of colors, typography, and spacing.
+  * - Showing an empty state when there are no analyses in the history.
+  * - Providing a summary of the total number of analyses and how many are currently shown based on the applied filter.
+  * - Handling loading states while fetching data from the API.
+  * - Ensuring that all interactions with the API (fetching, deleting) are handled gracefully with error handling and user feedback.
+  * - Using icons and color coding to enhance the visual distinction between different analysis statuses (threat, suspicious, safe).
+  * - Displaying key details of each analysis, such as the OCR text snippet and any URLs found, in a concise and readable format.
+  * - Providing a responsive design that works well on both desktop and mobile devices.
+  * - Encouraging users to review their past analyses to learn from their history and improve their phishing detection skills over time.
+ */
+
 import { Clock, AlertCircle, CheckCircle, Trash2, Download, Filter } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -25,7 +45,7 @@ export default function History() {
     filterAnalyses()
   }, [analyses, filterStatus])
 
-  const fetchHistory = async () => {
+    const fetchHistory = async () => {
     try {
       const res = await fetch('/api/analyses?limit=100')
       if (res.ok) {
@@ -38,7 +58,7 @@ export default function History() {
     }
   }
 
-  const filterAnalyses = () => {
+    const filterAnalyses = () => {
     if (filterStatus === 'all') {
       setFiltered(analyses)
     } else {
@@ -46,7 +66,7 @@ export default function History() {
     }
   }
 
-  const deleteAnalysis = async (id: string) => {
+    const deleteAnalysis = async (id: string) => {
     try {
       await fetch(`/api/analyses/${id}`, { method: 'DELETE' })
       setAnalyses(analyses.filter(a => a.id !== id))
@@ -55,7 +75,7 @@ export default function History() {
     }
   }
 
-  const exportHistory = () => {
+    const exportHistory = () => {
     const data = JSON.stringify(analyses, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
     const url = window.URL.createObjectURL(blob)
@@ -65,7 +85,7 @@ export default function History() {
     a.click()
   }
 
-  const getStatusColor = (status: string) => {
+    const getStatusColor = (status: string) => {
     switch(status) {
       case 'threat': return 'text-red-400 bg-red-500/10 border-red-500/20'
       case 'suspicious': return 'text-orange-400 bg-orange-500/10 border-orange-500/20'
@@ -74,7 +94,7 @@ export default function History() {
     }
   }
 
-  const getStatusIcon = (status: string) => {
+    const getStatusIcon = (status: string) => {
     switch(status) {
       case 'threat': return <AlertCircle className="w-4 h-4" />
       case 'safe': return <CheckCircle className="w-4 h-4" />

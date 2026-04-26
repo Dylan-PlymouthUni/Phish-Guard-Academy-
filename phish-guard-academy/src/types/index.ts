@@ -1,3 +1,19 @@
+/**
+ * Central TypeScript type definitions used by frontend modules.
+ * This file defines interfaces and types for core data structures such as challenges, lessons, user settings, analysis results, and user progress.
+ * These types are used throughout the PhishGuard Academy application to ensure type safety and consistency when working with data related to challenges, lessons, user preferences, phishing analysis results, and user progress tracking.
+ * - Challenge: Represents a phishing detection challenge, including its title, description, difficulty, time limit, points, and associated questions.
+ * - Question: Represents a question within a challenge, including the question text, type, options, correct answer, and explanation.
+ * - ChallengeStats: Represents statistics related to a challenge, such as attempts, passes, and best score.
+ * - Lesson: Represents an educational lesson, including its title, description, difficulty, duration, points, content, and completion status.
+ * - UserSettings: Represents user preferences for the application, such as theme, notification settings, difficulty level, language, privacy mode, and auto-save.
+ * - AnalysisResult: Represents the result of analyzing a URL for phishing risk, including risk score, label, summary, confidence level, findings, and any bounding boxes for detected elements.
+ * - Finding: Represents a specific finding from a phishing analysis, including its type, label, detail description, and severity level.
+ * - URLInfo: Represents information about a URL, including its risk score, whether it's suspicious, reasons for suspicion, and optional machine learning risk percentage.
+ * - UserProgress: Represents a user's progress in the PhishGuard Academy, including total points, lessons completed, challenges passed, and achievements.
+ * - Achievement: Represents an achievement that a user can earn, including its title, description, icon, points awarded, and unlocked status.
+ */
+
 export interface Challenge {
   id: string
   title: string

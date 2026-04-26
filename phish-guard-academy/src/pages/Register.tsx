@@ -1,3 +1,15 @@
+/**
+ * Register component/module file.
+ * This file defines the Register page, which allows users to create a new account in the PhishGuard Academy application.
+ * It includes the following responsibilities:
+ * - Rendering a registration form with fields for name, email, password, and confirm password.
+ * - Validating user input (e.g., matching passwords, minimum length, bcrypt byte limit).
+ * - Handling form submission by calling the register function from the AuthContext.
+ * - Displaying error messages and loading states to provide feedback to the user.
+ * - Redirecting to the dashboard upon successful registration.
+ * - Providing a link to the login page for users who already have an account.
+ */
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +30,7 @@ export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 

@@ -1,3 +1,13 @@
+/**
+ * App component/module file.
+ * This file defines the main App component which sets up routing, context providers, and global effects for the PhishGuard Academy application.
+ * It includes the following responsibilities:
+ * - Setting up React Router for navigation between pages.
+ * - Wrapping the application in various context providers for authentication, notifications, achievements, and ML settings.
+ * - Initializing global settings and keyboard shortcuts on app load.
+ * - Defining a ProtectedRoute component to guard routes that require authentication.
+ */
+
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'

@@ -20,6 +20,7 @@ class PhishingDatasetCollector:
     """Collect phishing URLs and emails from public sources"""
     
     def __init__(self, output_dir: Path = Path("data/training")):
+        """Initialize class state and store required dependencies."""
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -249,6 +250,7 @@ class EmailDatasetCollector:
     """Collect phishing email datasets"""
     
     def __init__(self, output_dir: Path = Path("data/training")):
+        """Initialize class state and store required dependencies."""
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
     

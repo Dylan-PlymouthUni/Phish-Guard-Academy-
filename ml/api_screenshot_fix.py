@@ -2,6 +2,8 @@
 Screenshot fallback analysis utility.
 
 Used when the primary ensemble pipeline is unavailable for image inputs.
+This module defines the analyze_screenshot_content function, which takes the raw bytes of an uploaded screenshot, extracts text using OCR, identifies URLs and suspicious phrases, analyzes visual features of the image, and computes a risk score indicating the likelihood that the screenshot contains phishing content. 
+The function returns a structured analysis result that includes detected URLs with their associated risk scores, any suspicious language found in the text, visual feature metrics, and an overall risk assessment with a label and summary. This provides a fallback mechanism for analyzing screenshots when the main ML ensemble is not available, ensuring that users still receive valuable insights about potential phishing threats in their uploaded images.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ SUSPICIOUS_PHRASES = [
 
 
 def risk_label_from_score(risk_percent: int) -> str:
+    """Run risk label from score."""
     if risk_percent >= 70:
         return "likely_phishing"
     if risk_percent >= 40:
@@ -52,14 +55,18 @@ def risk_label_from_score(risk_percent: int) -> str:
 
 
 def risk_summary_from_score(risk_percent: int) -> str:
+    """Run risk summary from score."""
     if risk_percent >= 70:
-        return "Multiple phishing-like signals were detected in this screenshot."
+        return "Multiple phishing-like signals were detected in this content."
     if risk_percent >= 40:
         return "Some suspicious signals were found. Verify before taking action."
-    return "No strong phishing signals were detected in this screenshot."
+    return "No strong phishing signals were detected in this content."
 
 
 def _extract_text_and_boxes(image: Image.Image) -> Tuple[str, List[List[int]]]:
+    """Internal helper for extract text and boxes.
+
+Args: image."""
     if not HAS_TESSERACT or pytesseract is None:
         return "", []
 
@@ -89,6 +96,9 @@ def _extract_text_and_boxes(image: Image.Image) -> Tuple[str, List[List[int]]]:
 
 
 def _score_url(url: str) -> Tuple[float, List[str]]:
+    """Internal helper for score url.
+
+Args: url."""
     score = 0.0
     reasons: List[str] = []
     url_l = url.lower()
@@ -113,6 +123,9 @@ def _score_url(url: str) -> Tuple[float, List[str]]:
 
 
 def analyze_screenshot_content(content: bytes) -> Dict[str, Any]:
+    """Analyze screenshot content and return risk-focused findings.
+
+Args: content."""
     if not content:
         raise ValueError("Empty upload")
 

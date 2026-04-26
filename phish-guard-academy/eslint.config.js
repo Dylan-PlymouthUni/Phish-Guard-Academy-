@@ -1,3 +1,10 @@
+/**
+ * ESLint configuration for the frontend TypeScript/React project.
+ * This configuration extends recommended rules from ESLint, TypeScript ESLint, React Hooks, and React Refresh plugins.
+ * It also sets the ECMAScript version to 2020 and includes browser globals.
+ * The 'dist' directory is globally ignored to prevent linting of build artifacts.
+ */
+
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'

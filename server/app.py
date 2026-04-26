@@ -1,3 +1,10 @@
+"""App utilities for PhishGuard Academy.
+Defines the FastAPI app, routes, and core analysis logic.
+
+The main analysis endpoint (/api/analyze) accepts text, URL, and image inputs and uses an ensemble of ML models to detect phishing indicators. 
+It also includes fallback heuristics if the ML analysis fails. The app includes authentication, user settings, and persistence of analyses to a database. 
+Additional endpoints for challenges, lessons, and analytics are handled by separate routers for modularity."""
+
 from fastapi import FastAPI, UploadFile, File, Form, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -108,12 +115,14 @@ app.add_middleware(
 app.openapi = lambda: custom_openapi(app)
 
 class Finding(BaseModel):
+    """One normalized finding shown in API responses and frontend cards."""
     type: str
     label: str
     detail: str
     severity: str  # "low" | "med" | "high"
 
 class AnalysisResponse(BaseModel):
+    """Standard response payload returned by analysis endpoints."""
     risk: int  # 0..100
     findings: List[Finding]
     boxes: List[dict] = []  # image regions if any
@@ -123,6 +132,7 @@ LOOKALIKE_RE = re.compile(r"(paypaI|rnicrosoft|faceb00k|app1e|goog1e)", re.I)
 URGENT_RE = re.compile(r"(urgent|immediately|24\s*hours|verify now|account (locked|closed))", re.I)
 
 def score_from_signals(has_url: bool, urgent: bool, lookalike: bool) -> int:
+    """Combine simple fallback signals into a bounded 0-100 risk score."""
     base = 5
     if urgent: base += 40
     if has_url: base += 20
@@ -142,6 +152,7 @@ def root():
 @app.get("/api/health")
 @limiter.limit("60/minute")
 def health(request: Request):
+    """Liveness endpoint used by uptime checks and deployments."""
     return {"ok": True}
 
 @app.get("/health")
@@ -346,6 +357,7 @@ async def analyze(
 # Settings endpoints
 @app.get("/api/settings")
 def get_settings():
+    """Return settings."""
     return {
         "notifications": True,
         "email_alerts": False,
@@ -356,17 +368,21 @@ def get_settings():
 
 @app.post("/api/settings")
 async def update_settings(settings: Dict[str, Any]):
+    """Echo updated settings payload (placeholder until persistence is wired)."""
     return {"success": True, "settings": settings}
 
 @app.post("/api/settings/reset")
 async def reset_settings():
+    """Reset user settings to defaults (currently returns success only)."""
     return {"success": True}
 
 # History endpoints
 @app.get("/api/analyses")
 def get_analyses(limit: int = 100):
+    """Return analysis history list (placeholder endpoint in this app layer)."""
     return []
 
 @app.delete("/api/analyses/{analysis_id}")
 async def delete_analysis(analysis_id: str):
+    """Delete one analysis record by id (placeholder endpoint)."""
     return {"success": True}

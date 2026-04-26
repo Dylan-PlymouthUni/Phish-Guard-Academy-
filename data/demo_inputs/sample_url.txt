@@ -1,0 +1,1 @@
+https://secure-paypal-alerts.example.com/verify-account

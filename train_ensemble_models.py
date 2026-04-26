@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
 Train all ensemble models: URL, Text, and Visual classifiers
+This script trains all components of the phishing detection ensemble, including the URL-based Random Forest model, the text classification model (optionally using BERT), and the visual/screenshot classifier if screenshot data is available.
+It also creates a configuration file for the ensemble that specifies the paths to the trained models and their
+respective weights in the ensemble decision-making process. 
+The script includes logging for each step of the training process and handles any exceptions that may arise, providing informative output to guide the user through the training workflow.
+The script is designed to be run from the command line and allows for optional arguments to customize the training process, such as using BERT for text classification or skipping text model training altogether.
 """
 import logging
 import argparse
@@ -27,6 +32,13 @@ class EnsembleTrainer:
     """Train all components of the ensemble"""
     
     def __init__(self, data_path: Path, output_dir: Path):
+        """
+        Initialize the trainer with source data and where trained artifacts should be saved.
+
+        Args:
+            data_path: CSV file containing at least `url` and `label` columns.
+            output_dir: Directory where model files and config will be written.
+        """
         self.data_path = data_path
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -289,6 +301,7 @@ class EnsembleTrainer:
 
 
 def main():
+    """Parse CLI arguments and run the full ensemble training workflow."""
     parser = argparse.ArgumentParser(description="Train ensemble phishing detection models")
     parser.add_argument(
         "--data",

@@ -1,3 +1,10 @@
+/**
+ * RiskGauge component/module file.
+  * This file defines the RiskGauge component, which is a visual representation of a risk score. 
+  * The gauge displays a percentage value and uses color coding to indicate low, medium, or high risk levels. 
+  * The component is designed to be reusable and customizable, allowing for different sizes and dynamic updates based on the risk score provided as a prop.
+ */
+
 import { useState, useEffect } from 'react'
 
 interface RiskGaugeProps {
@@ -12,7 +19,7 @@ export default function RiskGauge({ risk, size = 200 }: RiskGaugeProps) {
     setRotation((risk / 100) * 180 - 90)
   }, [risk])
 
-  const getColor = () => {
+    const getColor = () => {
     if (risk >= 70) return '#ef4444'
     if (risk >= 40) return '#f97316'
     return '#22c55e'

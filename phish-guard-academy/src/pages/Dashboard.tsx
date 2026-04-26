@@ -1,3 +1,8 @@
+/**
+ * Dashboard component/module file.
+  * This file defines the Dashboard page, which serves as the main landing page for users after logging into the PhishGuard Academy application.
+ */
+
 import { BarChart3, TrendingUp, AlertCircle, CheckCircle, Clock, Award, Target, Flame, Zap, Brain, TrendingDown, Activity, Users, Star, BookOpen, ArrowRight, Shield, Share2, Calendar } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
@@ -63,7 +68,7 @@ export default function Dashboard() {
     { id: '4', title: 'Challenge Master', description: 'Pass 3 challenges', icon: '🏆', unlocked: false, progress: 0, total: 3 },
   ])
 
-  const handleShareProgress = async () => {
+    const handleShareProgress = async () => {
     const analytics = getAnalytics()
     const shared = await shareProgress({
       level: userLevel,
@@ -79,7 +84,7 @@ export default function Dashboard() {
     }
   }
 
-  const handleCompleteDailyChallenge = () => {
+    const handleCompleteDailyChallenge = () => {
     completeDailyChallenge()
     setDailyChallengeCompleted(true)
     success('Daily challenge completed! +500 bonus points! 🎉')
@@ -119,7 +124,7 @@ export default function Dashboard() {
     }))
 
     // Create recent activity feed from analyses
-    const recentAnalyses = progress.analyses_performed.slice(-5).reverse().map((analysis, idx) => ({
+        const recentAnalyses = progress.analyses_performed.slice(-5).reverse().map((analysis, idx) => ({
       id: `analysis-${idx}`,
       type: 'analysis' as const,
       title: `Screenshot Analysis`,
@@ -130,7 +135,7 @@ export default function Dashboard() {
     setRecentActivity(recentAnalyses)
     
     // Overlay backend achievements unlocks
-    const fetchAchievements = async () => {
+        const fetchAchievements = async () => {
       try {
         if (!token) return
         const res = await fetch(`${API_URL}/api/auth/achievements`, {
@@ -138,7 +143,7 @@ export default function Dashboard() {
         })
         if (!res.ok) return
         const data = await res.json()
-        const unlocked = new Set<string>((data.achievements || []).filter((a: any) => a.unlocked).map((a: any) => String(a.id)))
+                const unlocked = new Set<string>((data.achievements || []).filter((a: any) => a.unlocked).map((a: any) => String(a.id)))
         setAchievements(prev => prev.map(ach => ({ ...ach, unlocked: unlocked.has(String(ach.id)) })))
       } catch (e) {
         // ignore
@@ -147,7 +152,7 @@ export default function Dashboard() {
     fetchAchievements()
 
     // Refresh when page becomes visible
-    const handleVisibilityChange = () => {
+        const handleVisibilityChange = () => {
       if (!document.hidden) {
         const freshProgress = getProgress()
         const freshAnalytics = getAnalytics()

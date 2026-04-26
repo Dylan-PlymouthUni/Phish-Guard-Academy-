@@ -1,6 +1,11 @@
 """
 Data Collection Pipeline for Phishing Detection
-Collects and labels data from multiple sources
+Collects and labels data from multiple sources to create a comprehensive dataset for training ML models.
+This module defines the PhishingDataCollector class, which provides methods to collect phishing samples from various
+public datasets (such as PhishTank and OpenPhish) and legitimate URLs from sources like the Tranco top sites.
+It also includes functionality to augment the dataset with variations of legitimate URLs for better model training.
+The collected data is saved in a structured format (CSV, JSON, or JSONL) along
+with metadata about the collection process. The main method, collect_full_dataset, orchestrates the entire collection process and ensures that the resulting dataset is balanced and ready for use in training machine learning models for phishing detection.
 """
 from __future__ import annotations
 
@@ -21,6 +26,7 @@ class PhishingDataCollector:
     """Collect phishing samples from public datasets"""
     
     def __init__(self, output_dir: Path = Path("data/collected")):
+        """Initialize class state and store required dependencies."""
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         

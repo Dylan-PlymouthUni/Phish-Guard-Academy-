@@ -17,6 +17,7 @@ class UserRepository:
     """Repository for user operations"""
     
     def __init__(self, db: Session):
+        """Store active SQLAlchemy session for user-related operations."""
         self.db = db
     
     def create_user(self, email: str, password: str, name: str) -> Optional[DBUser]:
@@ -138,6 +139,7 @@ class AnalysisRepository:
     """Repository for analysis history"""
     
     def __init__(self, db: Session):
+        """Store active SQLAlchemy session for analysis history operations."""
         self.db = db
     
     def save_analysis(
@@ -217,6 +219,7 @@ class ChallengeRepository:
     """Repository for challenge attempts"""
     
     def __init__(self, db: Session):
+        """Store active SQLAlchemy session for challenge attempt operations."""
         self.db = db
     
     def save_attempt(
@@ -279,6 +282,7 @@ class LessonRepository:
     """Repository for lesson progress"""
     
     def __init__(self, db: Session):
+        """Store active SQLAlchemy session for lesson progress operations."""
         self.db = db
     
     def mark_progress(

@@ -1,6 +1,10 @@
 """
 Behavioral Analysis System
 Track user patterns and detect anomalies
+This module defines the BehaviorAnalyzer class, which provides methods to log user activities, compute statistics, detect anomalies, and calculate risk scores based on user behavior patterns. 
+The system is designed to monitor user interactions with the PhishGuard Academy platform, identify unusual activity that may indicate security risks or abuse, and provide insights into user engagement and progress.
+ The BehaviorAnalyzer class uses in-memory storage for simplicity, but it can be extended to use a persistent database for production use.
+  The global instance of BehaviorAnalyzer allows for easy integration with other parts of the application to log activities and analyze user behavior in real-time.
 """
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
@@ -15,6 +19,7 @@ class BehaviorAnalyzer:
     
     def __init__(self):
         # In-memory storage (in production, use database)
+        """Initialize class state and store required dependencies."""
         self.user_activities: Dict[str, List[Dict]] = defaultdict(list)
         self.user_baselines: Dict[str, Dict] = {}
         

@@ -1,3 +1,9 @@
+"""Train model utilities for PhishGuard Academy.
+This module defines the main training script for the machine learning model used in the PhishGuard Academy platform.
+ It loads the UCI Phishing Websites dataset from an ARFF file, preprocesses the data, and trains a RandomForestClassifier to detect phishing URLs based on the features provided in the dataset.
+  The trained model is then saved as a joblib file for later use by the ML engine. 
+  The script includes error handling for missing files and ensures that the model is trained with appropriate parameters for good performance on the phishing detection task."""
+
 from pathlib import Path
 
 import joblib
@@ -29,6 +35,7 @@ def load_arff(path: Path) -> pd.DataFrame:
 
 
 def main() -> None:
+    """Run the main CLI workflow for this module."""
     if not DATA_PATH.exists():
         raise FileNotFoundError(f"ARFF not found at {DATA_PATH}")
 

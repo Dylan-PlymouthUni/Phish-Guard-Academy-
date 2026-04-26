@@ -1,3 +1,14 @@
+/**
+ * Analyze component/module file.
+  * This file defines the Analyze page component for the PhishGuard Academy application. The Analyze page allows users to upload screenshots, paste email content, or enter URLs to analyze them for phishing indicators. The component handles user input, communicates with the backend API to perform analysis, and displays the results in a clear and informative way.
+  * The Analyze component includes the following responsibilities:
+  * - Handling user input for different analysis methods (screenshot, email text, URL).
+  * - Communicating with the backend API to perform analysis.
+  * - Displaying the analysis results in a clear and informative way.
+  * - Providing visual feedback during the analysis process.
+  * - Offering actionable recommendations based on the analysis results.
+ */
+
 import { Zap, AlertCircle, CheckCircle, Info, Eye, Send } from 'lucide-react'
 import { useState } from 'react'
 
@@ -27,7 +38,7 @@ export default function Analyze() {
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [activeTab, setActiveTab] = useState<'screenshot' | 'email' | 'url'>('screenshot')
 
-  const analyzeScreenshot = async () => {
+    const analyzeScreenshot = async () => {
     if (!file) return
     setLoading(true)
     try {
@@ -42,7 +53,7 @@ export default function Analyze() {
     }
   }
 
-  const analyzeText = async () => {
+    const analyzeText = async () => {
     if (!text && !url) return
     setLoading(true)
     try {
@@ -59,19 +70,19 @@ export default function Analyze() {
     }
   }
 
-  const getRiskColor = (percent: number) => {
+    const getRiskColor = (percent: number) => {
     if (percent >= 70) return 'text-red-500 bg-red-500/10'
     if (percent >= 40) return 'text-orange-500 bg-orange-500/10'
     return 'text-green-500 bg-green-500/10'
   }
 
-  const getRiskLevel = (percent: number) => {
+    const getRiskLevel = (percent: number) => {
     if (percent >= 70) return 'HIGH RISK'
     if (percent >= 40) return 'MEDIUM RISK'
     return 'SAFE'
   }
 
-  const getRecommendations = (percent: number) => {
+    const getRecommendations = (percent: number) => {
     if (percent >= 70) {
       return [
         '⛔ DO NOT click any links or download attachments',

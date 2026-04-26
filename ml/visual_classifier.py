@@ -49,6 +49,7 @@ class VisualPhishingDetector:
         model_name: str = "resnet50",
         use_gpu: bool = True
     ):
+        """Initialize model configuration, device selection, and optional OCR reader."""
         self.model_name = model_name
         if use_gpu and TORCH_AVAILABLE and torch and torch.cuda.is_available():
             self.device = "cuda"

@@ -13,6 +13,7 @@ PhishGuard Academy is a comprehensive, interactive web application designed to h
 - **Email Content Analysis**: Scan email text for phishing indicators and social engineering tactics
 - **URL Verification**: Check URLs for typosquatting, suspicious domains, and malicious patterns
 - **Real-time Risk Scoring**: Get instant threat assessments with detailed breakdowns
+- **Analysis Macros**: Trigger one-tap phishing scenario templates in Analyze for rapid demos and repeatable checks (Alt+1/Alt+2/Alt+3)
 
 ### Interactive Learning Hub
 - **7 Comprehensive Lessons** covering everything from phishing basics to incident response
@@ -150,6 +151,20 @@ Phish-Guard-Academy/
 - Python 3.8+
 - pip package manager
 
+### Quickstart (3 Commands)
+
+```bash
+pip install -r requirements.txt
+npm install
+npm run dev:backend
+```
+
+Then start frontend in another terminal:
+
+```bash
+npm run dev:frontend
+```
+
 ### Frontend Setup
 
 ```bash
@@ -175,6 +190,21 @@ uvicorn api:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Backend API will run on http://localhost:8000
+
+### Quality-of-Life Commands
+
+```bash
+# Canonical reproducibility run with auto-generated run_id
+npm run qol:run
+
+# Smoke check a running API (health + analyze)
+npm run qol:smoke
+
+# Exact dependency snapshot for environment replay
+python3 -m pip freeze > requirements-lock.txt
+```
+
+Deterministic demo text and URL samples are provided in `data/demo_inputs/`.
 
 ---
 
@@ -333,6 +363,13 @@ python scripts/run_experiment.py --seed 42 --run_id baseline_experiment --save_d
 
 # Help text
 python scripts/run_experiment.py --help
+```
+
+For convenience, you can also run the QoL wrapper (same canonical training path, with a pointer file for the latest run):
+
+```bash
+python scripts/qol_run.py --seed 42
+cat artifacts/runs/latest_qol_run.json
 ```
 
 ### Artifact Locations and Structure

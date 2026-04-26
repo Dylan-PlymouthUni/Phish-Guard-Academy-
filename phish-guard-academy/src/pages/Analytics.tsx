@@ -1,3 +1,8 @@
+/**
+ * Analytics component/module file.
+  * This file defines the Analytics page, which displays various statistics and visualizations related to the user's phishing detection activity in the PhishGuard Academy application.
+ */
+
 import { BarChart3, TrendingUp, AlertCircle, CheckCircle, PieChart as PieChartIcon, Activity, Calendar, Download, Target, Zap, Shield } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
@@ -41,15 +46,15 @@ export default function Analytics() {
   const location = useLocation()
 
   // Helper function to generate daily stats
-  const generateDailyStats = (analyses: any[]): DailyStats[] => {
-    const last30Days = Array.from({ length: 30 }, (_, i) => {
+    const generateDailyStats = (analyses: any[]): DailyStats[] => {
+        const last30Days = Array.from({ length: 30 }, (_, i) => {
       const date = new Date()
       date.setDate(date.getDate() - (29 - i))
       return date.toISOString().split('T')[0]
     })
 
     return last30Days.map(date => {
-      const dayAnalyses = analyses.filter(a => a.timestamp?.startsWith(date))
+            const dayAnalyses = analyses.filter(a => a.timestamp?.startsWith(date))
       const avgRisk = dayAnalyses.length > 0
         ? dayAnalyses.reduce((sum, a) => sum + a.risk_score, 0) / dayAnalyses.length
         : 0
@@ -70,10 +75,10 @@ export default function Analytics() {
 
   // Refresh data when page becomes visible or receives focus
   useEffect(() => {
-    const handleVisibilityChange = () => {
+        const handleVisibilityChange = () => {
       if (!document.hidden) fetchData()
     }
-    const handleFocus = () => fetchData()
+        const handleFocus = () => fetchData()
     
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleFocus)
@@ -89,7 +94,7 @@ export default function Analytics() {
     fetchData()
   }, [location.key])
 
-  const fetchData = async () => {
+    const fetchData = async () => {
     try {
       if (!token) {
         setSummary({
@@ -153,7 +158,7 @@ export default function Analytics() {
         }
       })
       const dayJson = await dayRes.json()
-      const ds: DailyStats[] = (dayJson.daily_stats || []).map((d: any) => ({
+            const ds: DailyStats[] = (dayJson.daily_stats || []).map((d: any) => ({
         date: d.date,
         analyses_count: d.count || 0,
         avg_risk_percent: 0,
@@ -209,6 +214,16 @@ export default function Analytics() {
     { name: 'Medium', count: summary.medium_risk_count, fill: '#f97316' },
     { name: 'Safe', count: summary.safe_count, fill: '#22c55e' }
   ]
+
+  const challengeMasteryPercent = Math.min(100, summary.challenges_passed * 20)
+  const learningProgressPercent = Math.min(100, (summary.total_lessons / 7) * 100)
+  const readinessScore = Math.round((challengeMasteryPercent * 0.6) + (learningProgressPercent * 0.4))
+  const hasRiskInsight = summary.avg_risk_percent > 60
+  const hasHighRiskInsight = summary.high_risk_count > summary.safe_count
+  const hasChallengeInsight = summary.challenges_passed >= 3
+  const hasActivityInsight = summary.total_analyses > 10
+  const hasGettingStartedInsight = summary.total_analyses === 0 && summary.challenges_passed < 3
+  const hasAnyInsight = hasRiskInsight || hasHighRiskInsight || hasChallengeInsight || hasActivityInsight || hasGettingStartedInsight
 
   return (
     <MainLayout>
@@ -375,16 +390,16 @@ export default function Analytics() {
 
         {/* Key Metrics & Activity Trend */}
         <div className="grid md:grid-cols-2 gap-6 mb-12">
-          {/* Key Metrics */}
+          {/* Analysis Risk Metrics */}
           <div className="bg-slate-800/30 border border-blue-500/20 rounded-lg p-6 backdrop-blur-xl">
             <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
               <Activity className="w-5 h-5 text-blue-400" />
-              Key Metrics
+              Analysis Risk Metrics
             </h2>
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between mb-2">
-                  <span className="text-slate-300">Average Risk Level</span>
+                  <span className="text-slate-300">Average Analyzed Content Risk</span>
                   <span className="font-bold text-white">{summary.avg_risk_percent.toFixed(1)}%</span>
                 </div>
                 <div className="w-full bg-slate-700 rounded-full h-2">
@@ -393,15 +408,58 @@ export default function Analytics() {
                     style={{ width: `${summary.avg_risk_percent}%` }}
                   ></div>
                 </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Based only on your analysis results, not challenge or lesson completion.
+                </p>
               </div>
               
+              <div className="pt-4 border-t border-slate-700">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-slate-300">High Risk Analyses</span>
+                  <span className="text-lg font-bold text-red-400">{summary.high_risk_count}</span>
+                </div>
+              </div>
+              
+              <div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-300">Safe Analyses</span>
+                  <span className="text-lg font-bold text-green-400">{summary.safe_count}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Training Progress */}
+          <div className="bg-slate-800/30 border border-emerald-500/20 rounded-lg p-6 backdrop-blur-xl">
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <Shield className="w-5 h-5 text-emerald-400" />
+              Training Progress
+            </h2>
+
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-slate-300">Security Readiness Score</span>
+                  <span className="font-bold text-white">{readinessScore}%</span>
+                </div>
+                <div className="w-full bg-slate-700 rounded-full h-2">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full"
+                    style={{ width: `${readinessScore}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Derived from challenge mastery and lesson completion only.
+                </p>
+              </div>
+
               <div className="pt-4 border-t border-slate-700">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-slate-300">Challenges Passed</span>
                   <span className="text-lg font-bold text-green-400">{summary.challenges_passed}</span>
                 </div>
               </div>
-              
+
               <div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-300">Lessons Completed</span>
@@ -556,34 +614,42 @@ export default function Analytics() {
         <div className="mt-12 bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-lg p-6 backdrop-blur-xl">
           <h2 className="text-xl font-bold text-white mb-4">Insights & Recommendations</h2>
           <ul className="space-y-3 text-slate-300">
-            {summary.avg_risk_percent > 60 && (
+            {hasRiskInsight && (
               <li className="flex gap-3">
                 <span className="text-orange-400">⚠️</span>
-                <span>Your average risk level is high. Consider reviewing flagged items more carefully.</span>
+                <span>Your average analyzed-content risk is high. Consider reviewing flagged items more carefully.</span>
               </li>
             )}
-            {summary.high_risk_count > summary.safe_count && (
+            {hasHighRiskInsight && (
               <li className="flex gap-3">
                 <span className="text-red-400">🔴</span>
                 <span>More than half of your analyses show high risk. Stay vigilant when browsing.</span>
               </li>
             )}
-            {summary.challenges_passed >= 3 && (
+            {hasChallengeInsight && (
               <li className="flex gap-3">
                 <span className="text-green-400">✓</span>
                 <span>Great job! You've passed {summary.challenges_passed} challenges. Keep learning!</span>
               </li>
             )}
-            {summary.total_analyses > 10 && (
+            {hasActivityInsight && (
               <li className="flex gap-3">
                 <span className="text-blue-400">📊</span>
                 <span>You've analyzed {summary.total_analyses} items. Your security awareness is improving.</span>
               </li>
             )}
-            {summary.total_analyses === 0 && summary.challenges_passed < 3 && (
+            {hasGettingStartedInsight && (
               <li className="flex gap-3">
                 <span className="text-slate-400">💡</span>
                 <span>Start analyzing phishing attempts and completing challenges to unlock personalized security insights!</span>
+              </li>
+            )}
+            {!hasAnyInsight && (
+              <li className="flex gap-3">
+                <span className="text-cyan-400">💡</span>
+                <span>
+                  Balanced progress so far. To improve faster, complete one lesson and one challenge, then run 2 to 3 new analyses this week.
+                </span>
               </li>
             )}
           </ul>

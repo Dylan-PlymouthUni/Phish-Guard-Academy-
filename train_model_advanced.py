@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """
-⚠️  LEGACY/EXPERIMENTAL — not used for dissertation results.
+ LEGACY/EXPERIMENTAL — not used for dissertation results.
 Use scripts/run_experiment.py for reproducible dissertation results.
 
 Advanced model training with hyperparameter tuning.
+This script trains an advanced Random Forest model for URL phishing detection using a comprehensive set of features extracted from the URLs. 
+It includes hyperparameter tuning using GridSearchCV to find the best combination of parameters for optimal performance. 
+The script evaluates the model on a test set and reports key metrics such as accuracy and ROC-AUC, as well as feature importance to understand which features contribute most to the model's predictions.
+ The trained model and its associated metadata are saved to disk for later use in generating predictions and evaluating performance.
 """
 
 import logging
@@ -21,6 +25,7 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 logger = logging.getLogger("train_advanced")
 
 def main() -> None:
+    """Run the main CLI workflow for this module."""
     arff_path = Path("data/combined_features.arff")
     model_path = Path("ml/model/phish_rf_full.joblib")
     

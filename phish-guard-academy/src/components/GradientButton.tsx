@@ -1,3 +1,11 @@
+/**
+ * GradientButton component/module file.
+  * This file defines the GradientButton component which is a reusable button component with gradient backgrounds. 
+  * It supports different variants (primary, success, danger) and can be disabled. 
+  * The component uses Tailwind CSS classes for styling and includes transition effects for hover states. 
+  * It accepts children as the button label and an optional onClick handler for click events.
+ */
+
 import React from 'react';
 
 interface GradientButtonProps {

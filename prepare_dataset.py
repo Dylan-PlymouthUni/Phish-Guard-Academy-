@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
 Step 1-4: Acquire, format, and merge legitimate URLs with phishing dataset
+This script collects legitimate URLs from the Majestic Million dataset, formats them, and merges them with a phishing dataset to create a comprehensive training dataset for the URL phishing detection model.
+The script checks for existing datasets to avoid redundant work, and it includes fallback mechanisms to ensure that
+a sufficient number of legitimate URLs are included in the final dataset. The resulting dataset is saved as url_dataset_full.csv, which is used for training the ML models in subsequent steps.
 """
 import pandas as pd
 import os
 
 def main():
+    """Run the main CLI workflow for this module."""
     print("=" * 70)
     print("STEP 1-4: Dataset Preparation")
     print("=" * 70)

@@ -1,3 +1,8 @@
+"""Engine utilities for PhishGuard Academy.
+This module defines the core machine learning engine for the PhishGuard Academy platform, including the loading of the trained model, feature extraction from URLs, and the scoring function that evaluates the risk of a given URL based on the model's predictions.
+The ML engine uses a RandomForest model trained on features derived from the UCI Phishing Websites dataset, and it provides a structured output that includes a risk score, confidence level, and detailed findings that explain which features contributed to the risk assessment. 
+This allows the platform to provide users with actionable insights"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -66,6 +71,7 @@ def _parse_url(url: str):
 
 
 def _is_ip(host: str) -> bool:
+    """Return True when the hostname portion of the URL is a literal IP address."""
     try:
         # Strip port if present
         host_only = host.split(":", 1)[0]
@@ -77,6 +83,7 @@ def _is_ip(host: str) -> bool:
 
 def _url_length_flag(u: str) -> int:
     # UCI coding: -1 legitimate, 0 suspicious, 1 phishing
+    """Map URL length into the UCI-style risk bucket used by the model."""
     L = len(u)
     if L < 54:
         return -1
@@ -87,6 +94,7 @@ def _url_length_flag(u: str) -> int:
 
 def _subdomain_flag(host: str) -> int:
     # UCI: having_Sub_Domain {-1,0,1}
+    """Score host complexity by counting subdomain depth."""
     if not host:
         return 0
     parts = host.split(".")
@@ -101,6 +109,7 @@ def _subdomain_flag(host: str) -> int:
 
 
 def _shortening_flag(host: str) -> int:
+    """Flag known URL shortener hosts, which are common in phishing links."""
     if not host:
         return 0
     return 1 if host in SHORTENERS else -1
@@ -108,6 +117,7 @@ def _shortening_flag(host: str) -> int:
 
 def _prefix_suffix_flag(host: str) -> int:
     # Check for '-' inside the registered domain label (e.g. "paypal-secure.com")
+    """Detect hyphenated domain labels, often used to mimic trusted brands."""
     if not host:
         return 0
     # crude split: take second-level + TLD
@@ -120,12 +130,14 @@ def _prefix_suffix_flag(host: str) -> int:
 
 
 def _having_at_symbol_flag(u: str) -> int:
+    """Mark URLs containing '@', which can hide the true destination."""
     return 1 if "@" in u else -1
 
 
 def _double_slash_redirect_flag(u: str) -> int:
     # Extra '//' after scheme is suspicious
     # e.g. http://example.com//login
+    """Detect suspicious extra slashes that may indicate redirection tricks."""
     if u.count("//") > 1:
         return 1
     return -1
@@ -134,6 +146,7 @@ def _double_slash_redirect_flag(u: str) -> int:
 def _https_token_flag(u: str, host: str) -> int:
     # "https" appearing in host or path while scheme is http is suspicious
     # e.g. http://https-secure-login.com
+    """Flag deceptive use of the string 'https' when the actual scheme is not HTTPS."""
     if "https" in host and not u.lower().startswith("https://"):
         return 1
     return -1

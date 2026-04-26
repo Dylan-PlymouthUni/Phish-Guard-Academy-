@@ -1,6 +1,12 @@
+/**
+ * Learn component/module file.
+  * This file defines the Learn page, which displays a list of educational lessons that users can read to improve their phishing detection skills in the PhishGuard Academy application.
+ */
+
 import { CheckCircle, AlertTriangle, Clock3, Target } from 'lucide-react'
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { Link } from 'react-router-dom'
 import { MainLayout } from '../components/layout/MainLayout'
 import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -42,13 +48,13 @@ export default function Learn() {
   const [showToast, setShowToast] = useState(false)
   const [localStats, setLocalStats] = useState(() => getProgress())
 
-  const stripEmojis = (value: string) =>
+    const stripEmojis = (value: string) =>
     value
       .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
       .replace(/[\u{2600}-\u{27BF}]/gu, '')
       .replace(/[\u{FE0F}\u{200D}]/gu, '')
 
-  const extractTakeaways = (content: string) => {
+    const extractTakeaways = (content: string) => {
     const bullets = stripEmojis(content)
       .split('\n')
       .map((line) => line.trim())
@@ -58,15 +64,15 @@ export default function Learn() {
     return bullets.slice(0, 4)
   }
 
-  const cleanContent = (content: string) =>
+    const cleanContent = (content: string) =>
     stripEmojis(content)
       .replace(/\n{3,}/g, '\n\n')
 
   const rawLessonList = lessons && lessons.length > 0 ? lessons : FALLBACK_LESSONS
-  const lessonList = rawLessonList.map(l => ({ ...l, completed: localStats.lessons_completed.includes(l.id) }))
+    const lessonList = rawLessonList.map(l => ({ ...l, completed: localStats.lessons_completed.includes(l.id) }))
   const usingFallback = !loading && (!lessons || lessons.length === 0 || !!error)
 
-  const completeLesson = async (lessonId: string) => {
+    const completeLesson = async (lessonId: string) => {
     try {
       const res = await fetch(`/api/complete-lesson/${lessonId}`, { 
         method: 'POST',
@@ -231,6 +237,18 @@ export default function Learn() {
             </button>
           ))}
         </div>
+
+        <Card className="mt-10 border-cyan-500/30 bg-gradient-to-r from-cyan-500/10 to-blue-500/10">
+          <CardContent className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-1">Turn knowledge into reflexes</h3>
+              <p className="text-slate-300 text-sm">After each lesson, run a challenge to reinforce what you just learned.</p>
+            </div>
+            <Link to="/challenges">
+              <Button variant="primary">Practice in Challenges</Button>
+            </Link>
+          </CardContent>
+        </Card>
         
         {showToast && (
           <Toast

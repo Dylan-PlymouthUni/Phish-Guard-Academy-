@@ -1,3 +1,14 @@
+/**
+ * Card component/module file.
+  * This file defines a reusable Card component along with its subcomponents (CardHeader, CardContent, CardFooter) for structuring content in the PhishGuard Academy application.
+  * The Card component provides a styled container with optional hover effects and badges, while the subcomponents allow for consistent formatting of headers, content, and footers within the card.
+  * It includes the following responsibilities:
+  * - Providing a flexible Card component that can be used across different pages and features of the application.
+  * - Allowing optional hover effects to enhance interactivity.
+  * - Supporting badges to highlight important information or statuses.
+  * - Structuring content with CardHeader, CardContent, and CardFooter for better readability and organization.
+ */
+
 import React from 'react';
 
 interface CardProps {

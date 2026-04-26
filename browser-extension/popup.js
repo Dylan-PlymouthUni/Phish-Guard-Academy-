@@ -1,9 +1,35 @@
 // Get API URL from storage or use default
 let API_URL = 'http://localhost:8000'
+const EXTENSION_DEFAULTS = {
+  apiUrl: 'http://localhost:8000',
+  sensitivity: 'balanced',
+  autoScan: true,
+  inlineWarnings: true,
+  badgeAlerts: true,
+  trustedDomains: ['localhost', '127.0.0.1', 'github.dev', 'codespaces.app']
+}
 
-chrome.storage.sync.get({ apiUrl: 'http://localhost:8000' }, (items) => {
+chrome.storage.sync.get(EXTENSION_DEFAULTS, (items) => {
   API_URL = items.apiUrl
+  document.getElementById('sensitivitySelect').value = items.sensitivity
+  document.getElementById('autoScanToggle').checked = items.autoScan
+  document.getElementById('inlineWarningsToggle').checked = items.inlineWarnings
+  document.getElementById('badgeAlertsToggle').checked = items.badgeAlerts
 })
+
+function saveExtensionSettings() {
+  chrome.storage.sync.set({
+    sensitivity: document.getElementById('sensitivitySelect').value,
+    autoScan: document.getElementById('autoScanToggle').checked,
+    inlineWarnings: document.getElementById('inlineWarningsToggle').checked,
+    badgeAlerts: document.getElementById('badgeAlertsToggle').checked,
+  })
+}
+
+document.getElementById('sensitivitySelect').addEventListener('change', saveExtensionSettings)
+document.getElementById('autoScanToggle').addEventListener('change', saveExtensionSettings)
+document.getElementById('inlineWarningsToggle').addEventListener('change', saveExtensionSettings)
+document.getElementById('badgeAlertsToggle').addEventListener('change', saveExtensionSettings)
 
 // Get current tab URL
 document.getElementById('checkCurrentPage').addEventListener('click', async () => {

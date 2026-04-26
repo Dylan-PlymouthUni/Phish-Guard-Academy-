@@ -1,3 +1,9 @@
+"""Compute metrics utilities for PhishGuard Academy.
+This script computes various performance metrics for the phishing detection models, including accuracy, precision, recall, F1-score, ROC-AUC, and average precision.
+It reads the predictions and true labels from results_with_baseline_ensemble.csv, calculates the metrics for both the random forest model and the ensemble model, and saves a summary of the metrics to metrics_summary.json.
+It also generates confusion matrices in markdown format and saves ROC and Precision-Recall curves as images for visual analysis of model performance. The script is designed to be run after the results have been generated and provides a comprehensive evaluation of the models' performance on the test set.
+"""
+
 import pandas as pd
 import numpy as np
 import json
@@ -27,6 +33,7 @@ ensemble_probas = df[ensemble_proba_col].values
 
 # Metrics function
 def compute_metrics(y_true, y_pred, y_proba):
+    """Compute metrics."""
     acc = accuracy_score(y_true, y_pred)
     prec = precision_score(y_true, y_pred, zero_division=0)
     rec = recall_score(y_true, y_pred, zero_division=0)

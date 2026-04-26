@@ -1,5 +1,8 @@
 """
 Multi-Factor Authentication API Endpoints
+This module defines the API endpoints for managing Multi-Factor Authentication (MFA) in the PhishGuard Academy platform.
+ It includes endpoints for setting up MFA, verifying TOTP tokens, disabling MFA, and verifying backup codes.
+  The endpoints are protected with authentication and integrate with the user repository to securely store MFA secrets and backup codes.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -16,18 +19,22 @@ from ml.persistence import get_repositories
 router = APIRouter(prefix="/api/mfa", tags=["mfa"])
 
 class MFASetupResponse(BaseModel):
+    """Schema for MFASetupResponse data."""
     secret: str
     qr_code: str
     backup_codes: List[str]
 
 class MFAVerifyRequest(BaseModel):
+    """Schema for MFAVerifyRequest data."""
     token: str
 
 class MFADisableRequest(BaseModel):
+    """Schema for MFADisableRequest data."""
     password: str
     token: Optional[str] = None
 
 class MFABackupCodeRequest(BaseModel):
+    """Schema for MFABackupCodeRequest data."""
     code: str
 
 @router.post("/setup", response_model=MFASetupResponse)

@@ -1,5 +1,9 @@
 """
 Achievements system for PhishGuard Academy
+This module defines the achievements system for the PhishGuard Academy platform, including the achievement definitions and the logic to check when a user has unlocked new achievements based on their activity and progress within the platform.
+The ACHIEVEMENTS list contains the definitions of each achievement, including its ID, title, description, icon, points, and the condition that must be met for the achievement to be unlocked.
+The check_achievement_unlocks function takes a user object and an optional database session, retrieves the necessary user statistics, and evaluates which achievements the user has unlocked based on the defined conditions. It returns a list of achievement IDs that the user has unlocked, which can then be used to update the user's profile and display the achievements in the user interface. 
+The function is designed to be flexible and can work
 """
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
@@ -7,6 +11,7 @@ from ml.db_models import DBAnalysis, DBChallengeAttempt, DBLessonProgress
 from pydantic import BaseModel
 
 class AchievementDef(BaseModel):
+    """Schema for AchievementDef data."""
     id: str
     title: str
     description: str

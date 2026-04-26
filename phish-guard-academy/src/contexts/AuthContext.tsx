@@ -1,3 +1,8 @@
+/**
+ * AuthContext component/module file.
+  * This file defines the AuthContext, which provides authentication-related state and functions to the PhishGuard Academy application.
+ */
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface User {
@@ -33,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Backend base URL: use Vite proxy in dev, allow override via env in other setups
   const API_URL = (import.meta as any)?.env?.VITE_API_URL ?? '';
 
-  const refreshUser = async () => {
+    const refreshUser = async () => {
     if (!token) return;
     
     try {
@@ -83,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentToken = localStorage.getItem('auth_token');
     if (!currentToken || !token) return;
 
-    const interval = setInterval(async () => {
+        const interval = setInterval(async () => {
       if (localStorage.getItem('auth_token') && !document.hidden) {
         try {
           const response = await fetch(`${API_URL}/api/auth/me`, {
@@ -118,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [token, API_URL]);
 
-  const register = async (email: string, password: string, name: string) => {
+    const register = async (email: string, password: string, name: string) => {
     setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/auth/register`, {
@@ -163,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string): Promise<{ mfaRequired: boolean; email?: string }> => {
+    const login = async (email: string, password: string): Promise<{ mfaRequired: boolean; email?: string }> => {
     setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -216,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const verifyMfa = async (email: string, tokenValue: string, backupCode?: string) => {
+    const verifyMfa = async (email: string, tokenValue: string, backupCode?: string) => {
     setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/auth/login/mfa`, {
@@ -261,7 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
+    const logout = () => {
     setToken(null);
     setUser(null);
     localStorage.removeItem('auth_token');
@@ -273,7 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('last_reminder_date');
   };
 
-  const addXP = async (xp: number) => {
+    const addXP = async (xp: number) => {
     if (!token) throw new Error('Not authenticated');
 
     try {
