@@ -20,7 +20,8 @@ def load_samples(base: Path) -> List[Tuple[str, int, int]]:
     """Load samples."""
     rows: List[Tuple[str, int, int]] = []
     for label_name, y in [("legitimate", 0), ("phishing", 1)]:
-        for p in (base / label_name).rglob("*"):
+        # Sort paths to avoid filesystem-dependent ordering differences in CI.
+        for p in sorted((base / label_name).rglob("*")):
             if not p.is_file() or p.suffix.lower() not in {".png", ".jpg", ".jpeg", ".bmp", ".webp"}:
                 continue
             risk = analyze_screenshot_content(p.read_bytes())["risk"]
