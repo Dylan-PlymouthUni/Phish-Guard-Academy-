@@ -101,6 +101,14 @@ export default function SettingsPage() {
   const [notificationTestCount, setNotificationTestCount] = useState(0)
   const [notificationLastTestAt, setNotificationLastTestAt] = useState<string | null>(null)
 
+  const handleSessionExpired = () => {
+    logout()
+    setToastType('warning')
+    setToastMessage('Session expired. Please sign in again.')
+    setShowToast(true)
+    navigate('/login')
+  }
+
   useEffect(() => {
     fetchSettings()
     estimateStorageUsage()
@@ -164,6 +172,12 @@ export default function SettingsPage() {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}` },
       })
+
+      if (res.status === 401) {
+        handleSessionExpired()
+        return
+      }
+
       if (res.ok) {
         await refreshUser()
         setDisplayNameInput(nextName)
@@ -208,6 +222,12 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ current_password: passwordForm.current, new_password: passwordForm.next }),
       })
+
+      if (res.status === 401) {
+        handleSessionExpired()
+        return
+      }
+
       if (res.ok) {
         setPasswordForm({ current: '', next: '', confirm: '' })
         setToastType('success')

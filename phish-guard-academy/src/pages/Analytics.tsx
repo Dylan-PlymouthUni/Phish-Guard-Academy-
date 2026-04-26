@@ -11,6 +11,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Cart
 import { exportAnalyticsJSON, exportAnalyticsCSV, exportAnalysesCSV, exportCertificate } from '../utils/export'
 import { Button } from '../components/ui/Button'
 import { useLocation } from 'react-router-dom'
+import { getProgress } from '../utils/storage'
 
 interface DailyStats {
   date: string
@@ -69,6 +70,28 @@ export default function Analytics() {
     })
   }
 
+  const buildLocalSummary = (): SummaryStats => {
+    const progress = getProgress()
+    const analyses = progress.analyses_performed || []
+    const total = analyses.length
+    const high = analyses.filter(a => a.risk >= 70).length
+    const medium = analyses.filter(a => a.risk >= 40 && a.risk < 70).length
+    const safe = analyses.filter(a => a.risk < 40).length
+    const avgRisk = total > 0
+      ? analyses.reduce((sum, a) => sum + a.risk, 0) / total
+      : 0
+
+    return {
+      total_analyses: total,
+      high_risk_count: high,
+      medium_risk_count: medium,
+      safe_count: safe,
+      avg_risk_percent: Math.round(avgRisk),
+      challenges_passed: progress.challenges_completed.length,
+      total_lessons: progress.lessons_completed.length,
+    }
+  }
+
   useEffect(() => {
     fetchData()
   }, [token])
@@ -95,19 +118,18 @@ export default function Analytics() {
   }, [location.key])
 
     const fetchData = async () => {
+    const localProgress = getProgress()
+    const localSummary = buildLocalSummary()
+
     try {
       if (!token) {
-        setSummary({
-          total_analyses: 0,
-          high_risk_count: 0,
-          medium_risk_count: 0,
-          safe_count: 0,
-          avg_risk_percent: 0,
-          challenges_passed: 0,
-          total_lessons: 0
+        setSummary(localSummary)
+        setDistribution({
+          high: localSummary.high_risk_count,
+          medium: localSummary.medium_risk_count,
+          safe: localSummary.safe_count
         })
-        setDistribution({ high: 0, medium: 0, safe: 0 })
-        setDailyStats([])
+        setDailyStats(generateDailyStats(localProgress.analyses_performed || []))
         return
       }
       // Summary
@@ -118,8 +140,9 @@ export default function Analytics() {
           'Pragma': 'no-cache'
         }
       })
+      if (!sRes.ok) throw new Error(`summary ${sRes.status}`)
       const sJson = await sRes.json()
-      setSummary({
+      const backendSummary: SummaryStats = {
         total_analyses: sJson.total_analyses || 0,
         high_risk_count: sJson.high_risk_count || 0,
         medium_risk_count: sJson.medium_risk_count || 0,
@@ -127,7 +150,11 @@ export default function Analytics() {
         avg_risk_percent: sJson.average_risk || 0,
         challenges_passed: sJson.challenges_passed || 0,
         total_lessons: sJson.total_lessons || 0
-      })
+      }
+
+      const useLocalFallback = backendSummary.total_analyses === 0 && localSummary.total_analyses > 0
+      const summaryToUse = useLocalFallback ? localSummary : backendSummary
+      setSummary(summaryToUse)
       
       // Sync user stats
       if (sJson.user_stats) {
@@ -142,8 +169,13 @@ export default function Analytics() {
           'Pragma': 'no-cache'
         }
       })
+      if (!dRes.ok) throw new Error(`distribution ${dRes.status}`)
       const dJson = await dRes.json()
-      setDistribution({
+      setDistribution(useLocalFallback ? {
+        high: localSummary.high_risk_count,
+        medium: localSummary.medium_risk_count,
+        safe: localSummary.safe_count
+      } : {
         high: dJson.high || 0,
         medium: dJson.medium || 0,
         safe: dJson.low || 0
@@ -157,31 +189,44 @@ export default function Analytics() {
           'Pragma': 'no-cache'
         }
       })
+      if (!dayRes.ok) throw new Error(`daily ${dayRes.status}`)
       const dayJson = await dayRes.json()
-            const ds: DailyStats[] = (dayJson.daily_stats || []).map((d: any) => ({
-        date: d.date,
-        analyses_count: d.count || 0,
-        avg_risk_percent: 0,
-        challenges_passed: 0,
-        lessons_completed: 0
-      }))
+      const ds: DailyStats[] = useLocalFallback
+        ? generateDailyStats(localProgress.analyses_performed || [])
+        : (dayJson.daily_stats || []).map((d: any) => ({
+            date: d.date,
+            analyses_count: d.count || 0,
+            avg_risk_percent: 0,
+            challenges_passed: 0,
+            lessons_completed: 0
+          }))
       setDailyStats(ds)
       
       // Refresh user stats
       await refreshUser()
     } catch (err) {
       console.error('Failed to fetch analytics:', err)
-      setSummary({
-        total_analyses: 0,
-        high_risk_count: 0,
-        medium_risk_count: 0,
-        safe_count: 0,
-        avg_risk_percent: 0,
-        challenges_passed: 0,
-        total_lessons: 0
-      })
-      setDistribution({ high: 0, medium: 0, safe: 0 })
-      setDailyStats([])
+      if (localSummary.total_analyses > 0 || localSummary.challenges_passed > 0 || localSummary.total_lessons > 0) {
+        setSummary(localSummary)
+        setDistribution({
+          high: localSummary.high_risk_count,
+          medium: localSummary.medium_risk_count,
+          safe: localSummary.safe_count
+        })
+        setDailyStats(generateDailyStats(localProgress.analyses_performed || []))
+      } else {
+        setSummary({
+          total_analyses: 0,
+          high_risk_count: 0,
+          medium_risk_count: 0,
+          safe_count: 0,
+          avg_risk_percent: 0,
+          challenges_passed: 0,
+          total_lessons: 0
+        })
+        setDistribution({ high: 0, medium: 0, safe: 0 })
+        setDailyStats([])
+      }
     } finally {
       setLoading(false)
     }

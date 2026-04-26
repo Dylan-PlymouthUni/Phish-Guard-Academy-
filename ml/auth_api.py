@@ -10,7 +10,8 @@ from typing import Optional
 from pydantic import BaseModel
 from ml.auth import (
     UserCreate, UserLogin, TokenResponse, UserProfile,
-    create_access_token, verify_token, validate_password_length
+    create_access_token, verify_token, validate_password_length,
+    hash_password, verify_password
 )
 from ml.db_models import get_db
 from ml.persistence import get_repositories
@@ -37,6 +38,12 @@ class MFALoginRequest(BaseModel):
     email: str
     token: str
     backup_code: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    """Schema for change-password requests."""
+    current_password: str
+    new_password: str
 
 
 def get_current_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
@@ -276,6 +283,29 @@ async def update_profile(
         xp=updated_user.xp,
         streak=updated_user.streak
     )
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Change the current user's password."""
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid current password")
+
+    try:
+        validate_password_length(body.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    repos = get_repositories(db)
+    updated_user = repos["users"].update(user.id, password_hash=hash_password(body.new_password))
+    if not updated_user:
+        raise HTTPException(status_code=400, detail="Failed to change password")
+
+    return {"success": True}
 
 
 @router.post("/add-xp")

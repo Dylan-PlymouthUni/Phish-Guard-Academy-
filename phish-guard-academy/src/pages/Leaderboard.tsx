@@ -10,6 +10,7 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { getAnalytics, getProgress } from '../utils/storage'
 
 interface LeaderboardEntry {
   rank: number
@@ -26,9 +27,49 @@ interface LeaderboardEntry {
 export default function Leaderboard() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [currentUser, setCurrentUser] = useState<LeaderboardEntry | null>(null)
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null)
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'all-time'>('all-time')
   const { token, user } = useAuth()
   const API_URL = (import.meta as any)?.env?.VITE_API_URL ?? ''
+
+  const getLocalUnlockedBadges = () => {
+    const analytics = getAnalytics()
+    let unlocked = 0
+
+    if (analytics.total_analyses >= 1) unlocked += 1
+    if (analytics.total_analyses >= 100) unlocked += 1
+    if (analytics.challenges_passed >= 1) unlocked += 1
+    if (analytics.challenges_passed >= 6) unlocked += 1
+    if (analytics.lessons_completed >= 1) unlocked += 1
+    if (analytics.lessons_completed >= 7) unlocked += 1
+    if (analytics.high_risk_count >= 10) unlocked += 1
+
+    return unlocked
+  }
+
+  const buildLocalCurrentUser = (): LeaderboardEntry | null => {
+    const analytics = getAnalytics()
+    const progress = getProgress()
+    const hasLocalActivity =
+      analytics.total_analyses > 0 ||
+      progress.total_points > 0 ||
+      progress.lessons_completed.length > 0 ||
+      progress.challenges_completed.length > 0
+
+    if (!user && !hasLocalActivity) return null
+
+    return {
+      rank: 1,
+      user_id: user?.user_id ?? 'local-user',
+      name: user?.name ?? 'You',
+      points: user?.xp ?? progress.total_points ?? progress.experience ?? 0,
+      level: user?.level ?? progress.level ?? 1,
+      streak: user?.streak ?? progress.streak_days ?? progress.streak ?? 0,
+      analyses: analytics.total_analyses,
+      achievements: Math.max(progress.achievements.length, getLocalUnlockedBadges()),
+      avatar: '😎'
+    }
+  }
 
   useEffect(() => {
     loadLeaderboard()
@@ -50,17 +91,13 @@ export default function Leaderboard() {
 
     const loadLeaderboard = async () => {
     try {
-      if (!token) {
-        setLeaderboard([])
-        setCurrentUser(null)
-        return
-      }
+        const localCurrentUser = buildLocalCurrentUser()
+
       const res = await fetch(`${API_URL}/api/leaderboard`, {
-        headers: { 
-          Authorization: `Bearer ${token}`
-        }
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       })
-      if (!res.ok) throw new Error('Failed to load leaderboard')
+      if (!res.ok) throw new Error(`Failed to load leaderboard (${res.status})`)
+
       const data = await res.json()
             const entries: LeaderboardEntry[] = (data.leaderboard || []).map((e: any) => ({
         rank: e.rank,
@@ -73,6 +110,16 @@ export default function Leaderboard() {
         achievements: e.achievements_count || 0,
         avatar: '😎'
       }))
+
+      setFallbackNotice(null)
+
+      if (entries.length === 0 && localCurrentUser) {
+        setFallbackNotice('Live leaderboard returned no rows. Showing your local profile instead.')
+        setLeaderboard([localCurrentUser])
+        setCurrentUser(localCurrentUser)
+        return
+      }
+
       setLeaderboard(entries)
       
       // Sync user stats if returned
@@ -92,10 +139,14 @@ export default function Leaderboard() {
         analyses: data.current_user.analyses_count || 0,
         achievements: data.current_user.achievements_count || 0,
         avatar: '😎'
-      } as LeaderboardEntry : null)
+      } as LeaderboardEntry : localCurrentUser)
       setCurrentUser(me || null)
     } catch (err) {
       console.error('Leaderboard error', err)
+      const localCurrentUser = buildLocalCurrentUser()
+      setFallbackNotice('Could not load live leaderboard. Showing local profile only. Check backend/API auth and retry.')
+      setLeaderboard(localCurrentUser ? [localCurrentUser] : [])
+      setCurrentUser(localCurrentUser)
     }
   }
 
@@ -124,6 +175,12 @@ export default function Leaderboard() {
           </div>
           <p className="text-slate-400">Compete with the best phishing hunters worldwide</p>
         </div>
+
+        {fallbackNotice && (
+          <div className="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-amber-200">
+            {fallbackNotice}
+          </div>
+        )}
 
         {/* Timeframe Selector */}
         <div className="mb-8 flex gap-3">
@@ -262,6 +319,12 @@ export default function Leaderboard() {
                   </div>
                 </motion.div>
               ))}
+
+              {leaderboard.length === 0 && (
+                <div className="p-8 text-center text-slate-400">
+                  No leaderboard data has synced to the backend yet. Start some signed-in activity to populate rankings.
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

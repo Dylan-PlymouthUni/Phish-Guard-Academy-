@@ -32,40 +32,113 @@ export default function Achievements() {
 
     const buildLocalAchievements = (): AchievementItem[] => {
     const analytics = getAnalytics()
+
+    const analysesCount = analytics.total_analyses
+    const highRiskCount = analytics.high_risk_count
+    const challengesPassed = analytics.challenges_passed
+    const lessonsCompleted = analytics.lessons_completed
+
     return [
       {
-        id: 'first-analysis',
-        title: 'First Analysis',
-        description: 'Complete your first analysis.',
-        icon: 'A1',
-        points: 50,
-        unlocked: analytics.total_analyses >= 1,
+        id: 'first_analysis',
+        title: 'First Steps',
+        description: 'Perform your first phishing analysis',
+        icon: '🚀',
+        points: 10,
+        unlocked: analysesCount >= 1,
       },
       {
-        id: 'threat-hunter',
-        title: 'Threat Hunter',
-        description: 'Detect 10 high-risk phishing attempts.',
-        icon: 'TH',
-        points: 150,
-        unlocked: analytics.high_risk_count >= 10,
+        id: 'hundred_analyses',
+        title: 'Analysis Master',
+        description: 'Complete 100 phishing analyses',
+        icon: '🎯',
+        points: 100,
+        unlocked: analysesCount >= 100,
       },
       {
-        id: 'learning-enthusiast',
-        title: 'Learning Enthusiast',
-        description: 'Complete 5 learning lessons.',
-        icon: 'LE',
-        points: 120,
-        unlocked: analytics.lessons_completed >= 5,
+        id: 'first_challenge',
+        title: 'Challenge Accepted',
+        description: 'Complete your first challenge',
+        icon: '⚔️',
+        points: 25,
+        unlocked: challengesPassed >= 1,
       },
       {
-        id: 'challenge-master',
+        id: 'all_challenges',
         title: 'Challenge Master',
-        description: 'Pass 3 challenges.',
-        icon: 'CM',
+        description: 'Complete all 6 challenges',
+        icon: '👑',
+        points: 150,
+        unlocked: challengesPassed >= 6,
+      },
+      {
+        id: 'seven_day_streak',
+        title: 'On Fire',
+        description: 'Maintain a 7-day activity streak',
+        icon: '🔥',
+        points: 50,
+        unlocked: false,
+      },
+      {
+        id: 'level_10',
+        title: 'Rising Star',
+        description: 'Reach level 10',
+        icon: '⭐',
+        points: 75,
+        unlocked: false,
+      },
+      {
+        id: 'level_25',
+        title: 'Cyber Guardian',
+        description: 'Reach level 25',
+        icon: '🛡️',
+        points: 200,
+        unlocked: false,
+      },
+      {
+        id: 'first_lesson',
+        title: 'Knowledge Seeker',
+        description: 'Complete your first lesson',
+        icon: '📚',
+        points: 20,
+        unlocked: lessonsCompleted >= 1,
+      },
+      {
+        id: 'all_lessons',
+        title: 'Master Educator',
+        description: 'Complete all 7 lessons',
+        icon: '🎓',
         points: 180,
-        unlocked: analytics.challenges_passed >= 3,
+        unlocked: lessonsCompleted >= 7,
+      },
+      {
+        id: 'perfect_challenge',
+        title: 'Perfect Score',
+        description: 'Achieve 100% on a challenge',
+        icon: '💯',
+        points: 80,
+        unlocked: highRiskCount >= 10,
       },
     ]
+  }
+
+  const mergeAchievements = (remote: AchievementItem[] = []) => {
+    const local = buildLocalAchievements()
+    const byId = new Map<string, AchievementItem>()
+
+    for (const achievement of local) {
+      byId.set(achievement.id, achievement)
+    }
+
+    for (const achievement of remote) {
+      const existing = byId.get(achievement.id)
+      byId.set(achievement.id, {
+        ...achievement,
+        unlocked: Boolean(achievement.unlocked || existing?.unlocked),
+      })
+    }
+
+    return Array.from(byId.values())
   }
 
   useEffect(() => {
@@ -102,7 +175,7 @@ export default function Achievements() {
       })
       if (!res.ok) throw new Error('Failed to load achievements')
       const data = await res.json()
-      setAchievements(data.achievements || [])
+      setAchievements(mergeAchievements(data.achievements || []))
     } catch (err) {
       console.error('Achievements error', err)
       setAchievements(buildLocalAchievements())

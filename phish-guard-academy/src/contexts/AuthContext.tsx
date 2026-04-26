@@ -38,6 +38,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Backend base URL: use Vite proxy in dev, allow override via env in other setups
   const API_URL = (import.meta as any)?.env?.VITE_API_URL ?? '';
 
+  const clearAuthState = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+  }
+
     const refreshUser = async () => {
     if (!token) return;
     
@@ -48,6 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           'Cache-Control': 'no-cache'
         },
       });
+
+      if (response.status === 401) {
+        clearAuthState();
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -97,6 +109,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               'Cache-Control': 'no-cache'
             },
           });
+
+          if (response.status === 401) {
+            clearAuthState();
+            return;
+          }
 
           if (response.ok) {
             const data = await response.json();
@@ -267,10 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
     const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
+    clearAuthState();
     // Clear all user-specific data to prevent stale data
     localStorage.removeItem('phishguard_analyses');
     localStorage.removeItem('phishguard_progress');
