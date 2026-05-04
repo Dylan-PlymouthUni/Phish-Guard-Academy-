@@ -488,7 +488,7 @@ This project is part of a dissertation for COMP3000 at the University of Plymout
 - FastAPI and React communities
 - PhishTank, OpenPhish, and URLhaus for threat intelligence data
 - Open-source phishing research community
-- All contributors and testers
+- My supervisor for helping me with advice and support throughout the project (you're the best)
 
 ---
 
@@ -502,4 +502,4 @@ This project is part of a dissertation for COMP3000 at the University of Plymout
 
 ---
 
-**Disclaimer**: This application is for educational purposes only. While the machine learning models are trained on real data, always exercise caution with suspicious emails and websites in real-world scenarios.
+**Disclaimer**: This application is for educational purposes only. While the machine learning models are trained on real data, always exercise caution with suspicious emails and websites in real-world scenarios and get in touch with real professionals.
