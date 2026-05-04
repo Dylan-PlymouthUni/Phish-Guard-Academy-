@@ -135,18 +135,31 @@ class VisualPhishingDetector:
             'confidence': 0.0,
             'findings': []
         }
-        
+
         if not CV2_AVAILABLE or cv2 is None:
-            result['risk'] = 0
-            result['confidence'] = 0.0
-            result['findings'] = [
-                {
-                    'type': 'system',
-                    'label': 'Visual analysis unavailable',
-                    'detail': 'OpenCV dependencies are not installed on this environment.',
-                    'severity': 'low'
+            # Keep the visual pipeline functional in reduced mode when OpenCV is unavailable.
+            img_array = np.array(image)
+            if len(img_array.shape) == 2:
+                img_array = np.stack([img_array, img_array, img_array], axis=-1)
+            elif img_array.shape[2] == 4:
+                img_array = img_array[:, :, :3]
+
+            result['visual_features'] = extract_screenshot_features(image)
+            if extract_text:
+                result['text_analysis'] = self._analyze_text_content(img_array)
+            if check_brands:
+                result['brand_analysis'] = {
+                    'detected_brands': [],
+                    'confidence_scores': {},
+                    'is_suspicious': False,
+                    'reason': 'OpenCV unavailable; brand matching skipped',
+                    'logo_locations': []
                 }
-            ]
+
+            risk_score = self._calculate_risk_score(result)
+            result['risk'] = int(risk_score * 100)
+            result['confidence'] = self._calculate_confidence(result)
+            result['findings'] = self._generate_findings(result)
             return result
 
         # Convert to numpy for OpenCV operations
@@ -475,8 +488,23 @@ class VisualPhishingDetector:
             else:
                 # Fallback to pytesseract
                 import pytesseract
-                analysis['extracted_text'] = pytesseract.image_to_string(img_array)
-                analysis['text_confidence'] = 0.5
+                data = pytesseract.image_to_data(img_array, output_type=pytesseract.Output.DICT)
+                tokens = []
+                confidences = []
+                for token, conf in zip(data.get('text', []), data.get('conf', [])):
+                    token = str(token).strip()
+                    if not token:
+                        continue
+                    tokens.append(token)
+                    try:
+                        conf_val = float(conf)
+                        if conf_val >= 0:
+                            confidences.append(min(1.0, conf_val / 100.0))
+                    except Exception:
+                        continue
+
+                analysis['extracted_text'] = ' '.join(tokens) if tokens else pytesseract.image_to_string(img_array)
+                analysis['text_confidence'] = float(np.mean(confidences)) if confidences else (0.35 if analysis['extracted_text'].strip() else 0.0)
         except Exception as e:
             logger.warning(f"OCR failed: {e}")
             return analysis
