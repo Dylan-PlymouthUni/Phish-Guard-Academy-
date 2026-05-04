@@ -23,9 +23,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from ml.challenges import CHALLENGES
 from ml.learning import LESSONS
-from ml.ensemble import PhishingEnsemble
-from ml.text_classifier import TextPhishingClassifier
-from ml.visual_classifier import VisualPhishingDetector
 from ml.auth_api import router as auth_router, get_current_user
 from ml.analysis_api import router as analysis_router
 from ml.email_analysis_api import router as email_router
@@ -60,11 +57,12 @@ def get_optional_user(request: Request):
     token_data = verify_token(token)
     return token_data
 
-def get_ensemble() -> PhishingEnsemble:
+def get_ensemble():
     """Get or initialize ensemble model"""
     global _ensemble
     if _ensemble is None:
         logger.info("Initializing Phishing Ensemble...")
+        from ml.ensemble import PhishingEnsemble
         _ensemble = PhishingEnsemble()
     return _ensemble
 
